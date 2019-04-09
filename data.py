@@ -1,7 +1,6 @@
 import os
 import tensorflow as tf
 import numpy as np
-import cv2
 from chambers import augmentations as aug
 
 
@@ -161,42 +160,3 @@ class Dataset(object):
             self._batched_dataset = self._batched_dataset.repeat()
         self._iter = self._batched_dataset.make_one_shot_iterator()
         self._get_batch = self._iter.get_next()
-
-
-# def dataset_memory(path):
-#     sets = load_train_test_val(path)
-#
-#     X_train = np.zeros((len(sets["train"][0]), 256, 256, 3), dtype=np.float32)
-#     y_train = np.zeros((len(sets["train"][1]), 256, 256, 2), dtype=np.float32)
-#     for i, (img, mask) in enumerate(zip(*sets["train"])):
-#         im = cv2.imread(img, -1) / 255
-#         msk = cv2.imread(mask, -1) / 255
-#         bg = np.equal(msk, 0)[:, :, 0].astype(np.float32)
-#         pt = np.equal(msk, 1)[:, :, 0].astype(np.float32)
-#         msk = np.stack([bg, pt], -1)
-#         X_train[i] = im
-#         y_train[i] = msk
-#
-#     X_val = np.zeros((len(sets["val"][0]), 256, 256, 3), dtype=np.float32)
-#     y_val = np.zeros((len(sets["val"][1]), 256, 256, 2), dtype=np.float32)
-#     for i, (img, mask) in enumerate(zip(*sets["val"])):
-#         im = cv2.imread(img, -1) / 255
-#         msk = cv2.imread(mask, -1) / 255
-#         bg = np.equal(msk, 0)[:, :, 0].astype(np.float32)
-#         pt = np.equal(msk, 1)[:, :, 0].astype(np.float32)
-#         msk = np.stack([bg, pt], -1)
-#         X_val[i] = im
-#         y_val[i] = msk
-#
-#     X_test = np.zeros((len(sets["test"][0]), 256, 256, 3), dtype=np.float32)
-#     y_test = np.zeros((len(sets["test"][1]), 256, 256, 2), dtype=np.float32)
-#     for i, (img, mask) in enumerate(zip(*sets["test"])):
-#         im = cv2.imread(img, -1) / 255
-#         msk = cv2.imread(mask, -1) / 255
-#         bg = np.equal(msk, 0)[:, :, 0].astype(np.float32)
-#         pt = np.equal(msk, 1)[:, :, 0].astype(np.float32)
-#         msk = np.stack([bg, pt], -1)
-#         X_test[i] = im
-#         y_test[i] = msk
-#
-#     return X_train, y_train, X_val, y_val, X_test, y_test

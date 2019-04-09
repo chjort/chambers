@@ -1,6 +1,5 @@
 import os
 import tensorflow as tf
-import numpy as np
 from chambers import augmentations as aug
 
 
@@ -12,11 +11,9 @@ def load_train_test_val(path):
         for file in os.listdir(os.path.join(path, set_)):
             image = os.path.join(path, *[set_, file])
             mask = os.path.join(path, *[set_ + "_labels", file])
-            # Todo: make it return [(img,mask), (img,mask)] instead of [[img,...,], [mask,...,]]
             images.append(image)
             masks.append(mask)
         sets[set_] = [images, masks]
-        # Todo: Shuffle
     return sets
 
 
@@ -39,7 +36,7 @@ def onehot_to_rgb(onehot, class_labels):
     return rgb_image
 
 
-def augment(img, mask):
+def augmentation(img, mask):
     img, mask = aug.random_color(img, mask, prob=0.5)
     img, mask = aug.random_flip_horizontal(img, mask)
     img, mask = aug.random_flip_vertical(img, mask)
@@ -69,19 +66,26 @@ class Datasets(object):
 
         sets = load_train_test_val(self._data_folder)
 
-        tf_train = tf.data.Dataset.from_tensor_slices((sets["train"][0], sets["train"][1]))
-        tf_test = tf.data.Dataset.from_tensor_slices((sets["test"][0], sets["test"][1]))
-        tf_val = tf.data.Dataset.from_tensor_slices((sets["val"][0], sets["val"][1]))
+        self._train = Dataset(x=sets["train"][0],
+                              y=sets["train"][1],
+                              class_labels=self._class_labels,
+                              shuffle=True,
+                              augment=True
+                              )
 
-        # TODO: SHUFFLE HERE INSTEAD
+        self._test = Dataset(x=sets["test"][0],
+                             y=sets["test"][1],
+                             class_labels=self._class_labels,
+                             shuffle=False,
+                             augment=False
+                             )
 
-        tf_train = tf_train.map(self.preprocess_train, num_parallel_calls=8)
-        tf_test = tf_test.map(self.preprocess_test, num_parallel_calls=8)
-        tf_val = tf_val.map(self.preprocess_test, num_parallel_calls=8)
-
-        self._train = Dataset(tf_train, len(sets["train"][0]))
-        self._test = Dataset(tf_test, len(sets["test"][0]))
-        self._val = Dataset(tf_val, len(sets["val"][0]))
+        self._val = Dataset(x=sets["val"][0],
+                            y=sets["val"][1],
+                            class_labels=self._class_labels,
+                            shuffle=False,
+                            augment=False
+                            )
 
     @property
     def data_folder(self):
@@ -107,56 +111,57 @@ class Datasets(object):
     def test(self):
         return self._test
 
-    def preprocess_train(self, img_path, mask_path):
-        img, mask = read_sample(img_path, mask_path)
-        #img, mask = aug.random_crop(img, mask, crop_shape=(256, 256))
-        img, mask = augment(img, mask)
-        mask = rgb_to_onehot(mask, self.class_labels)
-
-        img = tf.cast(img / 255, dtype=tf.float32)
-        return img, mask
-
-    def preprocess_test(self, img_path, mask_path):
-        img, mask = read_sample(img_path, mask_path)
-        #img, mask = aug.random_crop(img, mask, crop_shape=(256, 256))
-        mask = rgb_to_onehot(mask, self.class_labels)
-
-        img = tf.cast(img / 255, dtype=tf.float32)
-        return img, mask
-
 
 class Dataset(object):
-    def __init__(self, dataset, length=None):
-        self._dataset = dataset
-        self._batched_dataset = None
-        self._iter = None
-        self._get_batch = None
+    def __init__(self, x, y, class_labels, shuffle=True, augment=False):
+        """
+        Creates a tf.data.dataset object
 
-        if length is not None:
-            self._length = length
+        :param x: array of file paths for x samples
+        :param y: array of file paths for y samples
+        """
+        self._x = x
+        self._y = y
+        self._n = len(self._x)
+        self._class_labels = class_labels
+
+        self._tf_dataset = tf.data.Dataset.from_tensor_slices((x, y))
+        if shuffle:
+            self._tf_dataset = self._tf_dataset.shuffle(buffer_size=self._n, seed=42)
+        if augment:
+            self._tf_dataset = self._tf_dataset.map(self._preprocess_aug_fn, num_parallel_calls=4)
         else:
-            self._length = len(self._dataset)
+            self._tf_dataset = self._tf_dataset.map(self._preprocess_fn, num_parallel_calls=4)
+
+        self._batched_dataset = None
 
     @property
     def dataset(self):
         if self._batched_dataset is not None:
             return self._batched_dataset
         else:
-            return self._dataset
-
-    def next_batch(self):
-        assert self._get_batch is not None, "Batch size not set. Use 'set_batch' to specify batch size."
-        return self._get_batch
+            return self._tf_dataset
 
     @property
     def n(self):
-        return self._length
+        return self._n
 
-    def set_batch(self, batch_size, shuffle=True):
-        self._batched_dataset = self._dataset.batch(batch_size).prefetch(5)  # .prefetch(batch_size)
-        if shuffle:
-            self._batched_dataset = self._batched_dataset.shuffle(self._length, seed=42).repeat()
-        else:
-            self._batched_dataset = self._batched_dataset.repeat()
-        self._iter = self._batched_dataset.make_one_shot_iterator()
-        self._get_batch = self._iter.get_next()
+    def _preprocess_fn(self, img_path, mask_path):
+        img, mask = read_sample(img_path, mask_path)
+        mask = rgb_to_onehot(mask, self._class_labels)
+        img = tf.cast(img / 255, dtype=tf.float32)
+        return img, mask
+
+    def _preprocess_aug_fn(self, img_path, mask_path):
+        img, mask = read_sample(img_path, mask_path)
+        img, mask = augmentation(img, mask)
+        mask = rgb_to_onehot(mask, self._class_labels)
+        img = tf.cast(img / 255, dtype=tf.float32)
+        return img, mask
+
+    def set_batch(self, batch_size):
+        n_prefetch = 1
+        if batch_size == 1:
+            n_prefetch = 5
+
+        self._batched_dataset = self._tf_dataset.batch(batch_size).prefetch(n_prefetch).repeat()

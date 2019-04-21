@@ -1,7 +1,7 @@
 import tensorflow as tf
 
 
-def random_crop(img, mask, crop_shape=(256,256)):
+def random_crop_v1(img, mask, crop_shape=(256, 256)):
     with tf.name_scope("random_crop"):
         height, width = crop_shape
         input_shape = tf.shape(img)
@@ -14,6 +14,14 @@ def random_crop(img, mask, crop_shape=(256,256)):
         mask = tf.image.crop_to_bounding_box(mask, xcoord[0], ycoord[0], width, height)
 
     return img, mask
+
+
+def random_crop_v2(img, mask, crop_shape=(256, 256)):
+    height, width = crop_shape
+    stacked_image = tf.stack([img, mask], axis=0)
+    cropped_image = tf.image.random_crop(stacked_image, size=[2, height, width, 3])
+
+    return cropped_image[0], cropped_image[1]
 
 
 def random_flip_horizontal(img, mask, prob=0.5):

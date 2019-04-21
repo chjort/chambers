@@ -1,7 +1,8 @@
 import tensorflow as tf
+from tensorflow.python.keras import layers
 
 
-class UpsampleNN(tf.keras.layers.Layer):
+class UpsampleNN(layers.Layer):
     def __init__(self, scale):
         super(UpsampleNN, self).__init__()
         self.scale = scale
@@ -17,7 +18,7 @@ class UpsampleNN(tf.keras.layers.Layer):
         return (self.w, self.h)
 
 
-class UnpoolBilinear(tf.keras.layers.Layer):
+class UnpoolBilinear(layers.Layer):
     def __init__(self, scale):
         super(UnpoolBilinear, self).__init__()
         self.scale = scale
@@ -34,11 +35,11 @@ class UnpoolBilinear(tf.keras.layers.Layer):
 
 
 def ResidualUnit(x, filters=48, filter_size=3):
-    x = tf.keras.layers.Conv2D(filters, kernel_size=[filter_size, filter_size], padding="same")(x)
-    x = tf.keras.layers.BatchNormalization()(x)
-    x = tf.keras.layers.ReLU()(x)
-    x = tf.keras.layers.Conv2D(filters, kernel_size=[filter_size, filter_size], padding="same")(x)
-    x = tf.keras.layers.BatchNormalization()(x)
+    x = layers.Conv2D(filters, kernel_size=[filter_size, filter_size], padding="same")(x)
+    x = layers.BatchNormalization()(x)
+    x = layers.ReLU()(x)
+    x = layers.Conv2D(filters, kernel_size=[filter_size, filter_size], padding="same")(x)
+    x = layers.BatchNormalization()(x)
 
     return x
 
@@ -46,20 +47,20 @@ def ResidualUnit(x, filters=48, filter_size=3):
 def FullResolutionResidualUnit(y, z, filters, pool_scale):
     FILTERS_1X1 = 32
 
-    G = tf.keras.layers.MaxPool2D(pool_size=[pool_scale, pool_scale], strides=[pool_scale, pool_scale], padding="same")(z)
-    G = tf.keras.layers.Concatenate()([y, G])
+    G = layers.MaxPool2D(pool_size=[pool_scale, pool_scale], strides=[pool_scale, pool_scale], padding="same")(z)
+    G = layers.Concatenate()([y, G])
 
-    G = tf.keras.layers.Conv2D(filters, kernel_size=[3, 3], padding="same")(G)
-    G = tf.keras.layers.BatchNormalization()(G)
-    G = tf.keras.layers.ReLU()(G)
+    G = layers.Conv2D(filters, kernel_size=[3, 3], padding="same")(G)
+    G = layers.BatchNormalization()(G)
+    G = layers.ReLU()(G)
 
-    G = tf.keras.layers.Conv2D(filters, kernel_size=[3, 3], padding="same")(G)
-    G = tf.keras.layers.BatchNormalization()(G)
-    G = tf.keras.layers.ReLU()(G)
+    G = layers.Conv2D(filters, kernel_size=[3, 3], padding="same")(G)
+    G = layers.BatchNormalization()(G)
+    G = layers.ReLU()(G)
 
-    H = tf.keras.layers.Conv2D(FILTERS_1X1, kernel_size=[1, 1], padding="same")(G)
+    H = layers.Conv2D(FILTERS_1X1, kernel_size=[1, 1], padding="same")(G)
     H = UpsampleNN(pool_scale)(H)
-    H = tf.keras.layers.Add()([z, H])
+    H = layers.Add()([z, H])
 
     return G, H
 
@@ -68,32 +69,32 @@ def FRRN_A(inputs, num_classes):
 
     with tf.name_scope("FRRN_A"):
         # Initial Stage
-        x = tf.keras.layers.Conv2D(48, kernel_size=[5, 5], padding="same")(inputs)
-        x = tf.keras.layers.BatchNormalization()(x)
-        x = tf.keras.layers.ReLU()(x)
+        x = layers.Conv2D(48, kernel_size=[5, 5], padding="same")(inputs)
+        x = layers.BatchNormalization()(x)
+        x = layers.ReLU()(x)
 
         x = ResidualUnit(x, filters=48, filter_size=3)
         x = ResidualUnit(x, filters=48, filter_size=3)
         x = ResidualUnit(x, filters=48, filter_size=3)
 
         # Downsampling Path
-        y = tf.keras.layers.MaxPool2D(pool_size=[2, 2], padding="same")(x)
-        z = tf.keras.layers.Conv2D(32, kernel_size=[1, 1], padding="same")(x)
+        y = layers.MaxPool2D(pool_size=[2, 2], padding="same")(x)
+        z = layers.Conv2D(32, kernel_size=[1, 1], padding="same")(x)
 
         y, z = FullResolutionResidualUnit(y, z, 96, 2)
         y, z = FullResolutionResidualUnit(y, z, 96, 2)
         y, z = FullResolutionResidualUnit(y, z, 96, 2)
-        y = tf.keras.layers.MaxPool2D(pool_size=[2, 2], padding="same")(y)
+        y = layers.MaxPool2D(pool_size=[2, 2], padding="same")(y)
 
         y, z = FullResolutionResidualUnit(y, z, 192, 4)
         y, z = FullResolutionResidualUnit(y, z, 192, 4)
         y, z = FullResolutionResidualUnit(y, z, 192, 4)
         y, z = FullResolutionResidualUnit(y, z, 192, 4)
-        y = tf.keras.layers.MaxPool2D(pool_size=[2, 2], padding="same")(y)
+        y = layers.MaxPool2D(pool_size=[2, 2], padding="same")(y)
 
         y, z = FullResolutionResidualUnit(y, z, 384, 8)
         y, z = FullResolutionResidualUnit(y, z, 384, 8)
-        y = tf.keras.layers.MaxPool2D(pool_size=[2, 2], padding="same")(y)
+        y = layers.MaxPool2D(pool_size=[2, 2], padding="same")(y)
 
         y, z = FullResolutionResidualUnit(y, z, 384, 16)
         y, z = FullResolutionResidualUnit(y, z, 384, 16)
@@ -114,13 +115,13 @@ def FRRN_A(inputs, num_classes):
         y = UnpoolBilinear(2)(y)
 
         # Final Stage
-        x = tf.keras.layers.Concatenate()([y, z])
+        x = layers.Concatenate()([y, z])
         x = ResidualUnit(x, filters=48, filter_size=3)
         x = ResidualUnit(x, filters=48, filter_size=3)
         x = ResidualUnit(x, filters=48, filter_size=3)
 
-        x = tf.keras.layers.Conv2D(num_classes, kernel_size=[1, 1], padding="same")(x)
-        x = tf.keras.layers.Softmax()(x)
+        x = layers.Conv2D(num_classes, kernel_size=[1, 1], padding="same")(x)
+        x = layers.Softmax()(x)
 
     model = tf.keras.models.Model(inputs=inputs, outputs=x, name="FRRN-A")
 
@@ -130,36 +131,36 @@ def FRRN_B(inputs, num_classes):
 
     with tf.name_scope("FRRN_B"):
         # Initial Stage
-        x = tf.keras.layers.Conv2D(48, kernel_size=[5, 5], padding="same")(inputs)
-        x = tf.keras.layers.BatchNormalization()(x)
-        x = tf.keras.layers.ReLU()(x)
+        x = layers.Conv2D(48, kernel_size=[5, 5], padding="same")(inputs)
+        x = layers.BatchNormalization()(x)
+        x = layers.ReLU()(x)
 
         x = ResidualUnit(x, filters=48, filter_size=3)
         x = ResidualUnit(x, filters=48, filter_size=3)
         x = ResidualUnit(x, filters=48, filter_size=3)
 
         # Downsampling Path
-        y = tf.keras.layers.MaxPool2D(pool_size=[2, 2], padding="same")(x)
-        z = tf.keras.layers.Conv2D(32, kernel_size=[1, 1], padding="same")(x)
+        y = layers.MaxPool2D(pool_size=[2, 2], padding="same")(x)
+        z = layers.Conv2D(32, kernel_size=[1, 1], padding="same")(x)
 
         y, z = FullResolutionResidualUnit(y, z, 96, 2)
         y, z = FullResolutionResidualUnit(y, z, 96, 2)
         y, z = FullResolutionResidualUnit(y, z, 96, 2)
-        y = tf.keras.layers.MaxPool2D(pool_size=[2, 2], padding="same")(y)
+        y = layers.MaxPool2D(pool_size=[2, 2], padding="same")(y)
 
         y, z = FullResolutionResidualUnit(y, z, 192, 4)
         y, z = FullResolutionResidualUnit(y, z, 192, 4)
         y, z = FullResolutionResidualUnit(y, z, 192, 4)
         y, z = FullResolutionResidualUnit(y, z, 192, 4)
-        y = tf.keras.layers.MaxPool2D(pool_size=[2, 2], padding="same")(y)
+        y = layers.MaxPool2D(pool_size=[2, 2], padding="same")(y)
 
         y, z = FullResolutionResidualUnit(y, z, 384, 8)
         y, z = FullResolutionResidualUnit(y, z, 384, 8)
-        y = tf.keras.layers.MaxPool2D(pool_size=[2, 2], padding="same")(y)
+        y = layers.MaxPool2D(pool_size=[2, 2], padding="same")(y)
 
         y, z = FullResolutionResidualUnit(y, z, 384, 16)
         y, z = FullResolutionResidualUnit(y, z, 384, 16)
-        y = tf.keras.layers.MaxPool2D(pool_size=[2, 2], padding="same")(y)
+        y = layers.MaxPool2D(pool_size=[2, 2], padding="same")(y)
 
         y, z = FullResolutionResidualUnit(y, z, 384, 32)
         y, z = FullResolutionResidualUnit(y, z, 384, 32)
@@ -184,13 +185,13 @@ def FRRN_B(inputs, num_classes):
         y = UnpoolBilinear(2)(y)
 
         # Final Stage
-        x = tf.keras.layers.Concatenate()([y, z])
+        x = layers.Concatenate()([y, z])
         x = ResidualUnit(x, filters=48, filter_size=3)
         x = ResidualUnit(x, filters=48, filter_size=3)
         x = ResidualUnit(x, filters=48, filter_size=3)
 
-        x = tf.keras.layers.Conv2D(num_classes, kernel_size=[1, 1], padding="same")(x)
-        x = tf.keras.layers.Softmax(name="softmax_out")(x)
+        x = layers.Conv2D(num_classes, kernel_size=[1, 1], padding="same")(x)
+        x = layers.Softmax(name="softmax_out")(x)
 
     model = tf.keras.models.Model(inputs=inputs, outputs=x, name="FRRN-B")
 

@@ -6,6 +6,7 @@ This module implements popular two-dimensional residual models.
 """
 
 import tensorflow as tf
+from tensorflow.python.keras import layers
 
 
 resnet_filename = 'ResNet-{}-model.keras.h5'
@@ -23,6 +24,8 @@ def download_resnet_imagenet(v):
         checksum = '05dc86924389e5b401a9ea0348a3213c'
     elif v == 152:
         checksum = '6ee11ef2b135592f8031058820bb9e71'
+    else:
+        return ValueError("Invalid ResNet version")
 
     return tf.keras.utils.get_file(
         filename,
@@ -36,7 +39,7 @@ def ResNet(inputs, blocks, block, include_top=True, classes=1000, numerical_name
     """
     Constructs a `tf.keras.models.Model` object using the given block count.
 
-    :param inputs: input tensor (e.g. an instance of `tf.keras.layers.Input`)
+    :param inputs: input tensor (e.g. an instance of `layers.Input`)
 
     :param blocks: the network’s residual architecture
 
@@ -58,7 +61,7 @@ def ResNet(inputs, blocks, block, include_top=True, classes=1000, numerical_name
 
         >> shape, classes = (224, 224, 3), 1000
 
-        >> x = tf.keras.layers.Input(shape)
+        >> x = layers.Input(shape)
 
         >> blocks = [2, 2, 2, 2]
 
@@ -76,11 +79,11 @@ def ResNet(inputs, blocks, block, include_top=True, classes=1000, numerical_name
     if numerical_names is None:
         numerical_names = [True] * len(blocks)
 
-    x = tf.keras.layers.ZeroPadding2D(padding=3, name="padding_conv1")(inputs)
-    x = tf.keras.layers.Conv2D(64, (7, 7), strides=(2, 2), use_bias=False, name="conv1")(x)
-    x = tf.keras.layers.BatchNormalization(axis=axis, epsilon=1e-5, name="bn_conv1")(x)
-    x = tf.keras.layers.Activation("relu", name="conv1_relu")(x)
-    x = tf.keras.layers.MaxPooling2D((3, 3), strides=(2, 2), padding="same", name="pool1")(x)
+    x = layers.ZeroPadding2D(padding=3, name="padding_conv1")(inputs)
+    x = layers.Conv2D(64, (7, 7), strides=(2, 2), use_bias=False, name="conv1")(x)
+    x = layers.BatchNormalization(axis=axis, epsilon=1e-5, name="bn_conv1")(x)
+    x = layers.Activation("relu", name="conv1_relu")(x)
+    x = layers.MaxPooling2D((3, 3), strides=(2, 2), padding="same", name="pool1")(x)
 
     features = 64
 
@@ -97,8 +100,8 @@ def ResNet(inputs, blocks, block, include_top=True, classes=1000, numerical_name
     if include_top:
         assert classes > 0
 
-        x = tf.keras.layers.GlobalAveragePooling2D(name="pool5")(x)
-        x = tf.keras.layers.Dense(classes, activation="softmax", name="fc1000")(x)
+        x = layers.GlobalAveragePooling2D(name="pool5")(x)
+        x = layers.Dense(classes, activation="softmax", name="fc1000")(x)
 
         return tf.keras.models.Model(inputs=inputs, outputs=x, *args, **kwargs)
     else:
@@ -110,7 +113,7 @@ def ResNet18(inputs, blocks=None, include_top=True, classes=1000, *args, **kwarg
     """
     Constructs a `tf.keras.models.Model` according to the ResNet18 specifications.
 
-    :param inputs: input tensor (e.g. an instance of `tf.keras.layers.Input`)
+    :param inputs: input tensor (e.g. an instance of `layers.Input`)
 
     :param blocks: the network’s residual architecture
 
@@ -126,7 +129,7 @@ def ResNet18(inputs, blocks=None, include_top=True, classes=1000, *args, **kwarg
 
         >> shape, classes = (224, 224, 3), 1000
 
-        >> x = tf.keras.layers.Input(shape)
+        >> x = layers.Input(shape)
 
         >> model = keras_resnet.models.ResNet18(x, classes=classes)
 
@@ -142,7 +145,7 @@ def ResNet34(inputs, blocks=None, include_top=True, classes=1000, *args, **kwarg
     """
     Constructs a `tf.keras.models.Model` according to the ResNet34 specifications.
 
-    :param inputs: input tensor (e.g. an instance of `tf.keras.layers.Input`)
+    :param inputs: input tensor (e.g. an instance of `layers.Input`)
 
     :param blocks: the network’s residual architecture
 
@@ -158,7 +161,7 @@ def ResNet34(inputs, blocks=None, include_top=True, classes=1000, *args, **kwarg
 
         >> shape, classes = (224, 224, 3), 1000
 
-        >> x = tf.keras.layers.Input(shape)
+        >> x = layers.Input(shape)
 
         >> model = keras_resnet.models.ResNet34(x, classes=classes)
 
@@ -174,7 +177,7 @@ def ResNet50(inputs, weights="imagenet", blocks=None, include_top=True, classes=
     """
     Constructs a `tf.keras.models.Model` according to the ResNet50 specifications.
 
-    :param inputs: input tensor (e.g. an instance of `tf.keras.layers.Input`)
+    :param inputs: input tensor (e.g. an instance of `layers.Input`)
 
     :param blocks: the network’s residual architecture
 
@@ -190,7 +193,7 @@ def ResNet50(inputs, weights="imagenet", blocks=None, include_top=True, classes=
 
         >> shape, classes = (224, 224, 3), 1000
 
-        >> x = tf.keras.layers.Input(shape)
+        >> x = layers.Input(shape)
 
         >> model = keras_resnet.models.ResNet50(x)
 
@@ -216,7 +219,7 @@ def ResNet101(inputs, weights="imagenet", blocks=None, include_top=True, classes
     """
     Constructs a `tf.keras.models.Model` according to the ResNet101 specifications.
 
-    :param inputs: input tensor (e.g. an instance of `tf.keras.layers.Input`)
+    :param inputs: input tensor (e.g. an instance of `layers.Input`)
 
     :param blocks: the network’s residual architecture
 
@@ -232,7 +235,7 @@ def ResNet101(inputs, weights="imagenet", blocks=None, include_top=True, classes
 
         >> shape, classes = (224, 224, 3), 1000
 
-        >> x = tf.keras.layers.Input(shape)
+        >> x = layers.Input(shape)
 
         >> model = keras_resnet.models.ResNet101(x, classes=classes)
 
@@ -258,7 +261,7 @@ def ResNet152(inputs, weights="imagenet", blocks=None, include_top=True, classes
     """
     Constructs a `tf.keras.models.Model` according to the ResNet152 specifications.
 
-    :param inputs: input tensor (e.g. an instance of `tf.keras.layers.Input`)
+    :param inputs: input tensor (e.g. an instance of `layers.Input`)
 
     :param blocks: the network’s residual architecture
 
@@ -274,7 +277,7 @@ def ResNet152(inputs, weights="imagenet", blocks=None, include_top=True, classes
 
         >> shape, classes = (224, 224, 3), 1000
 
-        >> x = tf.keras.layers.Input(shape)
+        >> x = layers.Input(shape)
 
         >> model = keras_resnet.models.ResNet152(x, classes=classes)
 
@@ -300,7 +303,7 @@ def ResNet200(inputs, blocks=None, include_top=True, classes=1000, *args, **kwar
     """
     Constructs a `tf.keras.models.Model` according to the ResNet200 specifications.
 
-    :param inputs: input tensor (e.g. an instance of `tf.keras.layers.Input`)
+    :param inputs: input tensor (e.g. an instance of `layers.Input`)
 
     :param blocks: the network’s residual architecture
 
@@ -316,7 +319,7 @@ def ResNet200(inputs, blocks=None, include_top=True, classes=1000, *args, **kwar
 
         >> shape, classes = (224, 224, 3), 1000
 
-        >> x = tf.keras.layers.Input(shape)
+        >> x = layers.Input(shape)
 
         >> model = keras_resnet.models.ResNet200(x, classes=classes)
 
@@ -376,30 +379,30 @@ def basic_2d(filters, stage=0, block=0, kernel_size=3, numerical_name=False, str
     stage_char = str(stage + 2)
 
     def f(x):
-        y = tf.keras.layers.ZeroPadding2D(padding=1, name="padding{}{}_branch2a".format(stage_char, block_char))(x)
-        y = tf.keras.layers.Conv2D(filters, kernel_size, strides=stride, use_bias=False,
+        y = layers.ZeroPadding2D(padding=1, name="padding{}{}_branch2a".format(stage_char, block_char))(x)
+        y = layers.Conv2D(filters, kernel_size, strides=stride, use_bias=False,
                                    name="res{}{}_branch2a".format(stage_char, block_char), **parameters)(y)
-        y = tf.keras.layers.BatchNormalization(axis=axis, epsilon=1e-5,
+        y = layers.BatchNormalization(axis=axis, epsilon=1e-5,
                                                name="bn{}{}_branch2a".format(stage_char, block_char))(y)
-        y = tf.keras.layers.Activation("relu", name="res{}{}_branch2a_relu".format(stage_char, block_char))(y)
+        y = layers.Activation("relu", name="res{}{}_branch2a_relu".format(stage_char, block_char))(y)
 
-        y = tf.keras.layers.ZeroPadding2D(padding=1, name="padding{}{}_branch2b".format(stage_char, block_char))(y)
-        y = tf.keras.layers.Conv2D(filters, kernel_size, use_bias=False,
+        y = layers.ZeroPadding2D(padding=1, name="padding{}{}_branch2b".format(stage_char, block_char))(y)
+        y = layers.Conv2D(filters, kernel_size, use_bias=False,
                                    name="res{}{}_branch2b".format(stage_char, block_char), **parameters)(y)
-        y = tf.keras.layers.BatchNormalization(axis=axis, epsilon=1e-5,
+        y = layers.BatchNormalization(axis=axis, epsilon=1e-5,
                                                name="bn{}{}_branch2b".format(stage_char, block_char))(y)
 
         if block == 0:
-            shortcut = tf.keras.layers.Conv2D(filters, (1, 1), strides=stride, use_bias=False,
+            shortcut = layers.Conv2D(filters, (1, 1), strides=stride, use_bias=False,
                                               name="res{}{}_branch1".format(stage_char, block_char), **parameters)(x)
-            shortcut = tf.keras.layers.BatchNormalization(axis=axis, epsilon=1e-5,
+            shortcut = layers.BatchNormalization(axis=axis, epsilon=1e-5,
                                                           name="bn{}{}_branch1".format(stage_char, block_char))(
                 shortcut)
         else:
             shortcut = x
 
-        y = tf.keras.layers.Add(name="res{}{}".format(stage_char, block_char))([y, shortcut])
-        y = tf.keras.layers.Activation("relu", name="res{}{}_relu".format(stage_char, block_char))(y)
+        y = layers.Add(name="res{}{}".format(stage_char, block_char))([y, shortcut])
+        y = layers.Activation("relu", name="res{}{}_relu".format(stage_char, block_char))(y)
 
         return y
 
@@ -447,35 +450,35 @@ def bottleneck_2d(filters, stage=0, block=0, kernel_size=3, numerical_name=False
     stage_char = str(stage + 2)
 
     def f(x):
-        y = tf.keras.layers.Conv2D(filters, (1, 1), strides=stride, use_bias=False,
+        y = layers.Conv2D(filters, (1, 1), strides=stride, use_bias=False,
                                    name="res{}{}_branch2a".format(stage_char, block_char), **parameters)(x)
-        y = tf.keras.layers.BatchNormalization(axis=axis, epsilon=1e-5,
+        y = layers.BatchNormalization(axis=axis, epsilon=1e-5,
                                                name="bn{}{}_branch2a".format(stage_char, block_char))(y)
-        y = tf.keras.layers.Activation("relu", name="res{}{}_branch2a_relu".format(stage_char, block_char))(y)
+        y = layers.Activation("relu", name="res{}{}_branch2a_relu".format(stage_char, block_char))(y)
 
-        y = tf.keras.layers.ZeroPadding2D(padding=1, name="padding{}{}_branch2b".format(stage_char, block_char))(y)
-        y = tf.keras.layers.Conv2D(filters, kernel_size, use_bias=False,
+        y = layers.ZeroPadding2D(padding=1, name="padding{}{}_branch2b".format(stage_char, block_char))(y)
+        y = layers.Conv2D(filters, kernel_size, use_bias=False,
                                    name="res{}{}_branch2b".format(stage_char, block_char), **parameters)(y)
-        y = tf.keras.layers.BatchNormalization(axis=axis, epsilon=1e-5,
+        y = layers.BatchNormalization(axis=axis, epsilon=1e-5,
                                                name="bn{}{}_branch2b".format(stage_char, block_char))(y)
-        y = tf.keras.layers.Activation("relu", name="res{}{}_branch2b_relu".format(stage_char, block_char))(y)
+        y = layers.Activation("relu", name="res{}{}_branch2b_relu".format(stage_char, block_char))(y)
 
-        y = tf.keras.layers.Conv2D(filters * 4, (1, 1), use_bias=False,
+        y = layers.Conv2D(filters * 4, (1, 1), use_bias=False,
                                    name="res{}{}_branch2c".format(stage_char, block_char), **parameters)(y)
-        y = tf.keras.layers.BatchNormalization(axis=axis, epsilon=1e-5,
+        y = layers.BatchNormalization(axis=axis, epsilon=1e-5,
                                                name="bn{}{}_branch2c".format(stage_char, block_char))(y)
 
         if block == 0:
-            shortcut = tf.keras.layers.Conv2D(filters * 4, (1, 1), strides=stride, use_bias=False,
+            shortcut = layers.Conv2D(filters * 4, (1, 1), strides=stride, use_bias=False,
                                               name="res{}{}_branch1".format(stage_char, block_char), **parameters)(x)
-            shortcut = tf.keras.layers.BatchNormalization(axis=axis, epsilon=1e-5,
+            shortcut = layers.BatchNormalization(axis=axis, epsilon=1e-5,
                                                           name="bn{}{}_branch1".format(stage_char, block_char))(
                 shortcut)
         else:
             shortcut = x
 
-        y = tf.keras.layers.Add(name="res{}{}".format(stage_char, block_char))([y, shortcut])
-        y = tf.keras.layers.Activation("relu", name="res{}{}_relu".format(stage_char, block_char))(y)
+        y = layers.Add(name="res{}{}".format(stage_char, block_char))([y, shortcut])
+        y = layers.Activation("relu", name="res{}{}_relu".format(stage_char, block_char))(y)
 
         return y
 

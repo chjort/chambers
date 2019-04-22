@@ -3,7 +3,6 @@ import tensorflow as tf
 from chambers.data.tfrecord import read_feature
 
 
-# TODO: Figure out how to optimize data pipeline when doing random crops. Only at around 50% GPU utilization.
 def load_train_test_val(path):
     sets = {"train": [], "test": [], "val": []}
     for set_ in sets.keys():
@@ -167,32 +166,32 @@ class Dataset(object):
         self._batched_dataset = self._tf_dataset.batch(batch_size).prefetch(n_prefetch).repeat()
 
 
-class TFRecord_Datasets(object):
+class TFRecordDatasets(object):
     def __init__(self, data_folder, augment_train=True, one_hot=True):
         self._data_folder = os.path.abspath(data_folder)
         self._class_names, self._class_labels = parse_class_dict_csv(os.path.join(self._data_folder,
                                                                                   "class_dict.csv"))
 
-        self._train = TFRecord_Dataset(filelist=[os.path.join(self._data_folder, "train.tfrec")],
-                                       class_labels=self._class_labels,
-                                       shuffle=True,
-                                       augmentation=augment_train,
-                                       one_hot=one_hot
-                                       )
-
-        self._test = TFRecord_Dataset(filelist=[os.path.join(self._data_folder, "test.tfrec")],
+        self._train = TFRecordDataset(filelist=[os.path.join(self._data_folder, "train.tfrec")],
                                       class_labels=self._class_labels,
-                                      shuffle=False,
-                                      augmentation=None,
+                                      shuffle=True,
+                                      augmentation=augment_train,
                                       one_hot=one_hot
                                       )
 
-        self._val = TFRecord_Dataset(filelist=[os.path.join(self._data_folder, "val.tfrec")],
+        self._test = TFRecordDataset(filelist=[os.path.join(self._data_folder, "test.tfrec")],
                                      class_labels=self._class_labels,
                                      shuffle=False,
                                      augmentation=None,
                                      one_hot=one_hot
                                      )
+
+        self._val = TFRecordDataset(filelist=[os.path.join(self._data_folder, "val.tfrec")],
+                                    class_labels=self._class_labels,
+                                    shuffle=False,
+                                    augmentation=None,
+                                    one_hot=one_hot
+                                    )
 
     @property
     def data_folder(self):
@@ -219,7 +218,7 @@ class TFRecord_Datasets(object):
         return self._test
 
 
-class TFRecord_Dataset(object):
+class TFRecordDataset(object):
     def __init__(self, filelist, class_labels, shuffle=True, augmentation=None, one_hot=True):
         """
         Creates a tf.data.dataset object from a list of TFRecord files

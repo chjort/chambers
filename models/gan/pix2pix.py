@@ -119,7 +119,7 @@ def Discriminator(inputs):
     return tf.keras.Model(inputs=[inputs, outputs], outputs=x, name="Discriminator")
 
 
-class Pix2Pix():
+class Pix2Pix:
     def __init__(self, inputs):
         self.g = Generator(inputs)
         self.d = Discriminator(inputs)

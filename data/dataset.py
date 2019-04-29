@@ -54,7 +54,7 @@ def read_sample(img_path, mask_path):
 
 
 class Datasets(object):
-    def __init__(self, data_folder, augment_train=None, onehot=True):
+    def __init__(self, data_folder, augment_train=None, augment_val=None, augment_test=None, one_hot=True):
         self._data_folder = os.path.abspath(data_folder)
         self._class_names, self._class_labels = parse_class_dict_csv(os.path.join(self._data_folder,
                                                                                   "class_dict.csv"))
@@ -66,23 +66,26 @@ class Datasets(object):
                               class_labels=self._class_labels,
                               shuffle=True,
                               augmentation=augment_train,
-                              one_hot=onehot
+                              one_hot=one_hot,
+                              n_threads=4
                               )
 
         self._test = Dataset(x=sets["test"][0],
                              y=sets["test"][1],
                              class_labels=self._class_labels,
                              shuffle=False,
-                             augmentation=None,
-                             one_hot=onehot
+                             augmentation=augment_test,
+                             one_hot=one_hot,
+                             n_threads=1
                              )
 
         self._val = Dataset(x=sets["val"][0],
                             y=sets["val"][1],
                             class_labels=self._class_labels,
                             shuffle=False,
-                            augmentation=None,
-                            one_hot=onehot
+                            augmentation=augment_val,
+                            one_hot=one_hot,
+                            n_threads=1
                             )
 
     @property
@@ -111,7 +114,7 @@ class Datasets(object):
 
 
 class Dataset(object):
-    def __init__(self, x, y, class_labels, shuffle=True, augmentation=None, one_hot=True):
+    def __init__(self, x, y, class_labels, shuffle=True, augmentation=None, one_hot=True, n_threads=4):
         """
         Creates a tf.data.dataset object from image files
 
@@ -125,6 +128,7 @@ class Dataset(object):
         self._shuffle = shuffle
         self._augmentation = augmentation
         self.one_hot = one_hot
+        self.n_threads = n_threads
 
         self._tf_dataset = self._make_pipeline()
 
@@ -145,7 +149,7 @@ class Dataset(object):
         tf_data = tf.data.Dataset.from_tensor_slices((self._x, self._y))
         if self._shuffle:
             tf_data = tf_data.shuffle(buffer_size=self._n, seed=42)
-        tf_data = tf_data.map(self._preprocess, num_parallel_calls=4)
+        tf_data = tf_data.map(self._preprocess, num_parallel_calls=self.n_threads)
 
         return tf_data
 
@@ -167,7 +171,7 @@ class Dataset(object):
 
 
 class TFRecordDatasets(object):
-    def __init__(self, data_folder, augment_train=True, one_hot=True):
+    def __init__(self, data_folder, augment_train=True, augment_val=None, augment_test=None, one_hot=True):
         self._data_folder = os.path.abspath(data_folder)
         self._class_names, self._class_labels = parse_class_dict_csv(os.path.join(self._data_folder,
                                                                                   "class_dict.csv"))
@@ -176,21 +180,24 @@ class TFRecordDatasets(object):
                                       class_labels=self._class_labels,
                                       shuffle=True,
                                       augmentation=augment_train,
-                                      one_hot=one_hot
+                                      one_hot=one_hot,
+                                      n_threads=4
                                       )
 
         self._test = TFRecordDataset(filelist=[os.path.join(self._data_folder, "test.tfrec")],
                                      class_labels=self._class_labels,
                                      shuffle=False,
-                                     augmentation=None,
-                                     one_hot=one_hot
+                                     augmentation=augment_test,
+                                     one_hot=one_hot,
+                                     n_threads=1
                                      )
 
         self._val = TFRecordDataset(filelist=[os.path.join(self._data_folder, "val.tfrec")],
                                     class_labels=self._class_labels,
                                     shuffle=False,
-                                    augmentation=None,
-                                    one_hot=one_hot
+                                    augmentation=augment_val,
+                                    one_hot=one_hot,
+                                    n_threads=1
                                     )
 
     @property
@@ -219,7 +226,7 @@ class TFRecordDatasets(object):
 
 
 class TFRecordDataset(object):
-    def __init__(self, filelist, class_labels, shuffle=True, augmentation=None, one_hot=True):
+    def __init__(self, filelist, class_labels, shuffle=True, augmentation=None, one_hot=True, n_threads=4):
         """
         Creates a tf.data.dataset object from a list of TFRecord files
 
@@ -231,6 +238,7 @@ class TFRecordDataset(object):
         self._shuffle = shuffle
         self._augmentation = augmentation
         self.one_hot = one_hot
+        self.n_threads = n_threads
 
         self._tf_dataset = self._make_pipeline()
 
@@ -258,10 +266,7 @@ class TFRecordDataset(object):
         tf_data = tf.data.TFRecordDataset(self._file_list)
         if self._shuffle:
             tf_data = tf_data.shuffle(buffer_size=self._n, seed=42)
-        # if self._augment:
-        #     tf_data = tf_data.map(self._preprocess_aug, num_parallel_calls=4)
-        # else:
-        tf_data = tf_data.map(self._preprocess, num_parallel_calls=4)
+        tf_data = tf_data.map(self._preprocess, num_parallel_calls=self.n_threads)
 
         return tf_data
 
@@ -278,20 +283,6 @@ class TFRecordDataset(object):
             mask = rgb_to_onehot(mask, self._class_labels)
         img = tf.cast(img / 255, dtype=tf.float32)
         return img, mask
-
-    # def _preprocess_aug(self, example):
-    #     feature = read_feature(example)
-    #
-    #     img = tf.image.decode_png(feature["image"], channels=3)
-    #     mask = tf.image.decode_png(feature["label"], channels=3)
-    #     img = tf.cast(img, tf.float32)
-    #     mask = tf.cast(mask, tf.float32)
-    #
-    #     img, mask = augmentation(img, mask)
-    #     if self.onehot:
-    #         mask = rgb_to_onehot(mask, self._class_labels)
-    #     img = tf.cast(img / 255, dtype=tf.float32)
-    #     return img, mask
 
     def set_batch(self, batch_size):
         n_prefetch = 1

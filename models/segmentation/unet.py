@@ -1,11 +1,16 @@
 import tensorflow as tf
 from tensorflow.python.keras import layers
+from chambers.layers import pad_to_factor
+
 
 def UNet(inputs, num_classes):
+    min_factor = 16
+    padding = pad_to_factor(inputs, min_factor)
 
+    padded_inputs = layers.ZeroPadding2D(padding)(inputs)
     with tf.name_scope("UNet"):
         # Downsampling Path
-        conv1 = layers.Conv2D(16, kernel_size=(3, 3), activation='elu', kernel_initializer='he_normal', padding='same')(inputs)
+        conv1 = layers.Conv2D(16, kernel_size=(3, 3), activation='elu', kernel_initializer='he_normal', padding='same')(padded_inputs)
         conv1 = layers.Conv2D(16, kernel_size=(3, 3), activation='elu', kernel_initializer='he_normal', padding='same')(conv1)
         pool1 = layers.MaxPooling2D(pool_size=(2, 2))(conv1)
 
@@ -46,7 +51,8 @@ def UNet(inputs, num_classes):
         conv9 = layers.Conv2D(16, kernel_size=(3, 3), activation='elu', kernel_initializer='he_normal', padding='same')(conv9)
         #conv9 = layers.SpatialDropout2D
         conv9 = layers.Conv2D(num_classes, kernel_size=(1, 1))(conv9)
-        outputs = layers.Softmax(name="softmax_out")(conv9)
+        softmax = layers.Softmax(name="softmax_out")(conv9)
+    outputs = layers.Cropping2D(padding)(softmax)
 
     model = tf.keras.models.Model(inputs=[inputs], outputs=[outputs], name="UNet")
 

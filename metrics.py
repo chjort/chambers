@@ -1,6 +1,13 @@
 import tensorflow as tf
 
 
+def top_2_categorical_accuracy(y_true, y_pred):
+    y_true_flat = tf.reshape(y_true, [-1])
+    y_pred_flat = tf.reshape(y_pred, [-1])
+
+    return tf.keras.metrics.top_k_categorical_accuracy(y_true_flat, y_pred_flat, k=2)
+
+
 def soft_dice_coef(y_true, y_pred):
     """
 
@@ -45,7 +52,7 @@ def hard_dice_coef_channelwise(y_true, y_pred):
     return coef
 
 
-def iou(y_true, y_pred):
+def overall_iou(y_true, y_pred):
     threshold = 0.5
     smooth = 1e-5
 
@@ -71,6 +78,18 @@ def iou_channelwise(y_true, y_pred):
 
     batch_iou = (intersection + smooth) / (union + smooth)
     return batch_iou
+
+
+def iou_conf(y_true, y_pred):
+    tp = true_positive(y_true, y_pred)
+    fp = false_positive(y_true, y_pred)
+    fn = false_negative(y_true, y_pred)
+    return tp / (tp + fp + fn)
+
+
+def mean_class_iou(y_true, y_pred):
+    iou_coef = iou_channelwise(y_true, y_pred)[:, 1:]
+    return tf.reduce_mean(iou_coef)
 
 
 def true_positive(y_true, y_pred):

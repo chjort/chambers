@@ -14,17 +14,17 @@ def get_model(model_name, input_shape, **kwargs):
 
     # Segmentation
     elif model_name == "UNet":
-        return UNet(inputs=input_layer, **kwargs)
+        return UNet(input_tensor=input_layer, **kwargs)
     elif model_name == "FRRN-A":
         return FRRN_A(inputs=input_layer, **kwargs)
     elif model_name == "FRRN-B":
         return FRRN_B(inputs=input_layer, **kwargs)
     elif model_name == "ResNet50_FPN":
-        return ResNet50_FPN(inputs=input_layer, **kwargs)
+        return ResNet50_FPN(input_tensor=input_layer, **kwargs)
     elif model_name == "ResNet101_FPN":
-        return ResNet101_FPN(inputs=input_layer, **kwargs)
+        return ResNet101_FPN(input_tensor=input_layer, **kwargs)
     elif model_name == "ResNet152_FPN":
-        return ResNet152_FPN(inputs=input_layer, **kwargs)
+        return ResNet152_FPN(input_tensor=input_layer, **kwargs)
 
     # GAN
     elif model_name == "Pix2Pix":

@@ -1,6 +1,7 @@
 import tensorflow as tf
 from tensorflow.python.keras import layers
 from chambers.models import ResNet50, ResNet101, ResNet152
+from chambers.layers import pad_to_factor
 
 
 def conv_bn_relu(input, num_channel, kernel_size, stride, name, padding='same', bn_axis=-1, bn_momentum=0.99,
@@ -97,8 +98,12 @@ def prediction_fpn_block(x, name, upsample=None):
     return x
 
 
-def ResNet50_FPN(inputs, num_classes, weights="imagenet", activation="softmax"):
-    resnet_base = ResNet50(inputs, weights=weights, include_top=True)
+def ResNet50_FPN(input_tensor, num_classes, weights="imagenet", activation="softmax"):
+    min_factor = 32
+    padding = pad_to_factor(input_tensor.shape.as_list()[1:3], min_factor)
+    input_tensor = layers.ZeroPadding2D(padding)(input_tensor)
+
+    resnet_base = ResNet50(input_tensor, weights=weights, include_top=True)
     conv1 = resnet_base.get_layer("conv1_relu").output
     conv2 = resnet_base.get_layer("res2c_relu").output
     conv3 = resnet_base.get_layer("res3d_relu").output
@@ -123,12 +128,19 @@ def ResNet50_FPN(inputs, num_classes, weights="imagenet", activation="softmax"):
         x = layers.Conv2D(num_classes, (1, 1), activation=activation, name=name)(x)
     else:
         x = layers.Conv2D(num_classes, (1, 1), activation=activation, name="mask")(x)
+    x = layers.Cropping2D(padding)(x)
+
+    inputs = tf.keras.utils.get_source_inputs(input_tensor)
     model = tf.keras.models.Model(inputs, x, name="ResNet50_FPN")
     return model
 
 
-def ResNet101_FPN(inputs, num_classes, weights="imagenet", activation="softmax"):
-    resnet_base = ResNet101(inputs, weights=weights, include_top=True)
+def ResNet101_FPN(input_tensor, num_classes, weights="imagenet", activation="softmax"):
+    min_factor = 32
+    padding = pad_to_factor(input_tensor.shape.as_list()[1:3], min_factor)
+    input_tensor = layers.ZeroPadding2D(padding)(input_tensor)
+
+    resnet_base = ResNet101(input_tensor, weights=weights, include_top=True)
     conv1 = resnet_base.get_layer("conv1_relu").output
     conv2 = resnet_base.get_layer("res2c_relu").output
     conv3 = resnet_base.get_layer("res3b3_relu").output
@@ -153,12 +165,19 @@ def ResNet101_FPN(inputs, num_classes, weights="imagenet", activation="softmax")
         x = layers.Conv2D(num_classes, (1, 1), activation=activation, name=name)(x)
     else:
         x = layers.Conv2D(num_classes, (1, 1), activation=activation, name="mask")(x)
+    x = layers.Cropping2D(padding)(x)
+
+    inputs = tf.keras.utils.get_source_inputs(input_tensor)
     model = tf.keras.models.Model(inputs, x, name="ResNet101_FPN")
     return model
 
 
-def ResNet152_FPN(inputs, num_classes, weights="imagenet", activation="softmax"):
-    resnet_base = ResNet152(inputs, weights=weights, include_top=True)
+def ResNet152_FPN(input_tensor, num_classes, weights="imagenet", activation="softmax"):
+    min_factor = 32
+    padding = pad_to_factor(input_tensor.shape.as_list()[1:3], min_factor)
+    input_tensor = layers.ZeroPadding2D(padding)(input_tensor)
+
+    resnet_base = ResNet152(input_tensor, weights=weights, include_top=True)
     conv1 = resnet_base.get_layer("conv1_relu").output
     conv2 = resnet_base.get_layer("res2c_relu").output
     conv3 = resnet_base.get_layer("res3b7_relu").output
@@ -180,5 +199,9 @@ def ResNet152_FPN(inputs, num_classes, weights="imagenet", activation="softmax")
     x = conv_relu(x, 64, 3, (1, 1), name="up5_conv2")
     x = layers.Conv2D(num_classes, (1, 1), name="mask", kernel_initializer="he_normal")(x)
     x = layers.Activation(activation)(x)
+
+    x = layers.Cropping2D(padding)(x)
+
+    inputs = tf.keras.utils.get_source_inputs(input_tensor)
     model = tf.keras.models.Model(inputs, x, name="ResNet152_FPN")
     return model

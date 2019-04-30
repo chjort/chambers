@@ -35,11 +35,11 @@ def download_resnet_imagenet(v):
 )
 
 
-def ResNet(inputs, blocks, block, include_top=True, classes=1000, numerical_names=None, name="ResNet", *args, **kwargs):
+def ResNet(input_tensor, blocks, block, include_top=True, classes=1000, numerical_names=None, name="ResNet", *args, **kwargs):
     """
     Constructs a `tf.keras.models.Model` object using the given block count.
 
-    :param inputs: input tensor (e.g. an instance of `layers.Input`)
+    :param input_tensor: input tensor (e.g. an instance of `layers.Input`)
 
     :param blocks: the network’s residual architecture
 
@@ -79,7 +79,7 @@ def ResNet(inputs, blocks, block, include_top=True, classes=1000, numerical_name
     if numerical_names is None:
         numerical_names = [True] * len(blocks)
 
-    x = layers.ZeroPadding2D(padding=3, name="padding_conv1")(inputs)
+    x = layers.ZeroPadding2D(padding=3, name="padding_conv1")(input_tensor)
     x = layers.Conv2D(64, (7, 7), strides=(2, 2), use_bias=False, name="conv1")(x)
     x = layers.BatchNormalization(axis=axis, epsilon=1e-5, name="bn_conv1")(x)
     x = layers.Activation("relu", name="conv1_relu")(x)
@@ -97,6 +97,7 @@ def ResNet(inputs, blocks, block, include_top=True, classes=1000, numerical_name
 
         outputs.append(x)
 
+    inputs = tf.keras.utils.get_source_inputs(input_tensor)
     if include_top:
         assert classes > 0
 

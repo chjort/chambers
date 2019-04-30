@@ -8,9 +8,8 @@ def pad_to_shape(layer1, layer2):
     return shape
 
 
-def pad_to_factor(inputs, factor):
-    input_shape = inputs.shape.as_list()
-    height, width = input_shape[1], input_shape[2]
+def pad_to_factor(input_shape, factor):
+    height, width = input_shape
 
     if height % factor != 0:
         pad_height_to = (height // factor + 1) * factor

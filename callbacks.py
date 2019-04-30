@@ -25,6 +25,7 @@ class Logger(tf.keras.callbacks.Callback):
         self.config_dir = config_dir
         self.log_dir = log_dir
         self.log_cache = {}
+        self.logfile_path = None
         self.logfile = None
         self.start_time = None
         self.fields = None
@@ -32,16 +33,20 @@ class Logger(tf.keras.callbacks.Callback):
         self.make_plots = plot
 
     def on_train_begin(self, logs=None):
-        self.start_time = time.time()
-        self.logfile = open(os.path.join(self.log_dir, "logfile.txt"), "w")
-        self.log_cache["epoch"] = []
-        self.log_cache = {v: [] for v in self.params["metrics"]}
-        self.logfile.write("epoch," + ",".join(self.params["metrics"]) + "\n")
-        self.sess = tf.keras.backend.get_session()
-        tf.train.write_graph(self.sess.graph_def, self.config_dir, "graph.pbtxt")
+        if self.logfile_path is None:
+            self.start_time = time.time()
+            self.logfile_path = os.path.join(self.log_dir, "logfile.txt")
+            self.logfile = open(self.logfile_path, "w")
+            self.log_cache["epoch"] = []
+            self.log_cache = {v: [] for v in self.params["metrics"]}
+            self.logfile.write("epoch," + ",".join(self.params["metrics"]) + "\n")
+            self.sess = tf.keras.backend.get_session()
+            tf.train.write_graph(self.sess.graph_def, self.config_dir, "graph.pbtxt")
+        else:
+            self.logfile = open(self.logfile_path, "a")
 
     def on_epoch_end(self, epoch, logs=None):
-        self.logfile.write(str(epoch))
+        self.logfile.write(str(epoch + 1))
         for metric in self.params["metrics"]:
             self.logfile.write("," + str(logs[metric]))
             self.log_cache[metric].append(logs[metric])
@@ -87,3 +92,22 @@ class Logger(tf.keras.callbacks.Callback):
         plt.xlabel("Epoch")
         plt.legend()
         plt.savefig(os.path.join(self.log_dir, title+".png"), transparent=True)
+
+
+class TerminateOnDemand(tf.keras.callbacks.Callback):
+    """Callback that terminates training when flag=1 is encountered.
+    """
+    def __init__(self):
+        super().__init__()
+        self.flag = 0
+
+    def on_train_begin(self, logs=None):
+        self.flag = 0
+
+    def on_batch_end(self, batch, logs=None):
+        if self.flag == 1:
+            print("\nStopping training.")
+            self.model.stop_training = True
+
+    def stop_training(self):
+        self.flag = 1

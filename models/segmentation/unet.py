@@ -3,11 +3,11 @@ from tensorflow.python.keras import layers
 from chambers.layers import pad_to_factor
 
 
-def UNet(inputs, num_classes):
+def UNet(input_tensor, num_classes):
     min_factor = 16
-    padding = pad_to_factor(inputs, min_factor)
+    padding = pad_to_factor(input_tensor.shape.as_list()[1:3], min_factor)
 
-    padded_inputs = layers.ZeroPadding2D(padding)(inputs)
+    padded_inputs = layers.ZeroPadding2D(padding)(input_tensor)
     with tf.name_scope("UNet"):
         # Downsampling Path
         conv1 = layers.Conv2D(16, kernel_size=(3, 3), activation='elu', kernel_initializer='he_normal', padding='same')(padded_inputs)
@@ -54,6 +54,7 @@ def UNet(inputs, num_classes):
         softmax = layers.Softmax(name="softmax_out")(conv9)
     outputs = layers.Cropping2D(padding)(softmax)
 
-    model = tf.keras.models.Model(inputs=[inputs], outputs=[outputs], name="UNet")
+    inputs = tf.keras.utils.get_source_inputs(input_tensor)
+    model = tf.keras.models.Model(inputs=inputs, outputs=[outputs], name="UNet")
 
     return model

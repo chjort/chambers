@@ -5,3 +5,4 @@ from . import losses
 from . import metrics
 from . import callbacks
 from . import augmentations
+from . import cross_validation

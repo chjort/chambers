@@ -7,7 +7,11 @@ def load_train_test_val(path):
     sets = {"train": [], "test": [], "val": []}
     for set_ in sets.keys():
         images, masks = [], []
-        for file in os.listdir(os.path.join(path, set_)):
+        try:
+            set_files = os.listdir(os.path.join(path, set_))
+        except FileNotFoundError:
+            continue
+        for file in set_files:
             image = os.path.join(path, *[set_, file])
             mask = os.path.join(path, *[set_ + "_labels", file])
             images.append(image)
@@ -53,6 +57,9 @@ def read_sample(img_path, mask_path):
     return img, mask
 
 
+
+
+
 class Datasets(object):
     def __init__(self, data_folder, augment_train=None, augment_val=None, augment_test=None, one_hot=True):
         self._data_folder = os.path.abspath(data_folder)
@@ -67,7 +74,7 @@ class Datasets(object):
                               shuffle=True,
                               augmentation=augment_train,
                               one_hot=one_hot,
-                              n_threads=4
+                              n_threads=4,
                               )
 
         self._test = Dataset(x=sets["test"][0],
@@ -76,7 +83,7 @@ class Datasets(object):
                              shuffle=False,
                              augmentation=augment_test,
                              one_hot=one_hot,
-                             n_threads=1
+                             n_threads=1,
                              )
 
         self._val = Dataset(x=sets["val"][0],
@@ -85,7 +92,7 @@ class Datasets(object):
                             shuffle=False,
                             augmentation=augment_val,
                             one_hot=one_hot,
-                            n_threads=1
+                            n_threads=1,
                             )
 
     @property
@@ -134,6 +141,7 @@ class Dataset(object):
 
         self._batched_dataset = None
 
+
     @property
     def dataset(self):
         if self._batched_dataset is not None:
@@ -159,7 +167,8 @@ class Dataset(object):
             img, mask = self._augmentation(img, mask)
         if self.one_hot:
             mask = rgb_to_onehot(mask, self._class_labels)
-        img = tf.cast(img / 255, dtype=tf.float32)
+
+        img = tf.cast(img / 255, tf.float32)
         return img, mask
 
     def set_batch(self, batch_size):

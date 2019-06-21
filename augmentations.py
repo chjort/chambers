@@ -1,6 +1,5 @@
 import tensorflow as tf
 
-
 def get_augmentation(aug_name):
     aug_map = {"random_crop": random_crop,
                "random_color": random_color,
@@ -8,9 +7,20 @@ def get_augmentation(aug_name):
                "flip_vertical": random_flip_vertical,
                "transpose": random_transpose,
                "rotate_90": random_rot90,
-               "random_rotation": random_rotation
+               "random_rotation": random_rotation,
                }
     return aug_map[aug_name]
+
+
+def augmentations_to_function(augmentations: list):
+    def aug_fn(img, mask):
+        for aug, args in augmentations:
+            if args is not None:
+                img, mask = get_augmentation(aug)(img, mask, **args)
+            else:
+                img, mask = get_augmentation(aug)(img, mask)
+        return img, mask
+    return aug_fn
 
 
 def random_crop(img, mask, crop_shape=(256, 256)):

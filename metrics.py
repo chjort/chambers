@@ -19,8 +19,8 @@ def soft_dice_coef(y_true, y_pred):
     smooth = 1e-5
 
     intersection = tf.reduce_sum(y_true * y_pred)
-    coef = (2. * intersection + smooth) / (tf.reduce_sum(y_true) + tf.reduce_sum(y_pred) + smooth)
-    return coef
+    batch_dsc = (2. * intersection + smooth) / (tf.reduce_sum(y_true) + tf.reduce_sum(y_pred) + smooth)
+    return batch_dsc
 
 
 def soft_dice_coef_channelwise(y_true, y_pred):
@@ -28,8 +28,8 @@ def soft_dice_coef_channelwise(y_true, y_pred):
     smooth = 1e-5
 
     intersection = tf.reduce_sum(y_true * y_pred, axis=axis)
-    coef = (2. * intersection + smooth) / (tf.reduce_sum(y_true, axis=axis) + tf.reduce_sum(y_pred, axis=axis) + smooth)
-    return coef
+    batch_dsc = (2. * intersection + smooth) / (tf.reduce_sum(y_true, axis=axis) + tf.reduce_sum(y_pred, axis=axis) + smooth)
+    return tf.reduce_mean(batch_dsc, axis=0)
 
 
 def hard_dice_coef(y_true, y_pred):
@@ -37,8 +37,8 @@ def hard_dice_coef(y_true, y_pred):
     y_true_h = tf.round(y_true)
     y_pred_h = tf.round(y_pred)
     intersection = tf.reduce_sum(y_true_h * y_pred_h)
-    coef = (2. * intersection + smooth) / (tf.reduce_sum(y_true_h) + tf.reduce_sum(y_pred_h) + smooth)
-    return coef
+    batch_coef = (2. * intersection + smooth) / (tf.reduce_sum(y_true_h) + tf.reduce_sum(y_pred_h) + smooth)
+    return batch_coef
 
 
 def hard_dice_coef_channelwise(y_true, y_pred):
@@ -47,9 +47,9 @@ def hard_dice_coef_channelwise(y_true, y_pred):
     y_true_h = tf.round(y_true)
     y_pred_h = tf.round(y_pred)
     intersection = tf.reduce_sum(y_true_h * y_pred_h, axis=axis)
-    coef = (2. * intersection + smooth) / (
+    batch_coef = (2. * intersection + smooth) / (
                 tf.reduce_sum(y_true_h, axis=axis) + tf.reduce_sum(y_pred_h, axis=axis) + smooth)
-    return coef
+    return tf.reduce_mean(batch_coef, axis=0)
 
 
 def overall_iou(y_true, y_pred):
@@ -77,19 +77,16 @@ def iou_channelwise(y_true, y_pred):
     union = tf.reduce_sum(tf.cast(tf.add(y_pred_tresh, y_true_thresh) >= 1, dtype=tf.float32), axis=axis)
 
     batch_iou = (intersection + smooth) / (union + smooth)
-    return batch_iou
-
-
-def iou_conf(y_true, y_pred):
-    tp = true_positive(y_true, y_pred)
-    fp = false_positive(y_true, y_pred)
-    fn = false_negative(y_true, y_pred)
-    return tp / (tp + fp + fn)
+    return tf.reduce_mean(batch_iou, axis=0)
 
 
 def mean_class_iou(y_true, y_pred):
-    iou_coef = iou_channelwise(y_true, y_pred)[:, 1:]
+    iou_coef = iou_channelwise(y_true, y_pred)[1:]
     return tf.reduce_mean(iou_coef)
+
+
+def particle_iou(y_true, y_pred):
+    return iou_channelwise(y_true, y_pred)[1]
 
 
 def true_positive(y_true, y_pred):

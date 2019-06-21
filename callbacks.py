@@ -16,6 +16,7 @@ class ValProgbar(tf.keras.callbacks.ProgbarLogger):
     def on_train_begin(self, logs=None):
         # filter out the training metrics
         self.params['metrics'] = [m for m in self.params['metrics'] if (m == "loss" or m.startswith('val_'))]
+        self.verbose = self.params['verbose']
         self.epochs = self.params['epochs']
 
 
@@ -27,7 +28,8 @@ class Logger(tf.keras.callbacks.Callback):
         self.log_cache = {}
         self.logfile_path = None
         self.logfile = None
-        self.start_time = None
+        self.total_time = 0
+        self.start_time = 0
         self.fields = None
         self.sess = None
         self.make_plots = plot
@@ -78,7 +80,8 @@ class Logger(tf.keras.callbacks.Callback):
 
     def on_train_end(self, logs=None):
         training_time = time.time() - self.start_time
-        self.logfile.write("Total training time: " + str(training_time) + "\n")
+        self.total_time += training_time
+        self.logfile.write("Total training time: " + str(self.total_time) + "\n")
         self.logfile.close()
 
     def plot(self, series, labels, title=None, ylabel=None):
@@ -94,7 +97,7 @@ class Logger(tf.keras.callbacks.Callback):
         plt.savefig(os.path.join(self.log_dir, title+".png"), transparent=True)
 
 
-class TerminateOnDemand(tf.keras.callbacks.Callback):
+class PauseOnDemand(tf.keras.callbacks.Callback):
     """Callback that terminates training when flag=1 is encountered.
     """
     def __init__(self):
@@ -106,8 +109,14 @@ class TerminateOnDemand(tf.keras.callbacks.Callback):
 
     def on_batch_end(self, batch, logs=None):
         if self.flag == 1:
-            print("\nStopping training.")
+            print("\nPausing training.")
             self.model.stop_training = True
 
     def stop_training(self):
         self.flag = 1
+
+
+class Tensorboard(tf.keras.callbacks.Callback):
+    def __init__(self):
+        super().__init__()
+        pass

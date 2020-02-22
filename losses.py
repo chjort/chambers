@@ -1,37 +1,63 @@
 import tensorflow as tf
-from chambers import metrics
+from .miners import MultiSimilarityMiner as _MSMiner
+import abc
 
 
-def hard_dice_loss(y_true, y_pred):
-    return 1 - metrics.hard_dice_coef(y_true, y_pred)
+class PairBasedLoss(tf.keras.losses.Loss):
+    def __init__(self, name):
+        super().__init__(name=name)
+
+    @abc.abstractmethod
+    def compute_similarity_matrix(self, y_true, y_pred):
+        pass
+
+    def get_signed_pairs(self, sim_mat, y_true, remove_positive_diag=True):
+        y_true = tf.reshape(y_true, [-1, 1])
+        pos_pair_mask = tf.equal(y_true, tf.transpose(y_true))
+        neg_pair_mask = tf.logical_not(pos_pair_mask)
+
+        if remove_positive_diag:
+            # remove mirror pairs
+            diag_len = tf.shape(sim_mat)[0]
+            pos_pair_mask = tf.linalg.set_diag(pos_pair_mask, tf.tile([False], [diag_len]))
+
+        # get similarities for positive pairs
+        pos_mat = tf.RaggedTensor.from_row_lengths(values=sim_mat[pos_pair_mask],
+                                                   row_lengths=tf.reduce_sum(tf.cast(pos_pair_mask, tf.int32), axis=1)
+                                                   )
+
+        # get similarities for negative pairs
+        neg_mat = tf.RaggedTensor.from_row_lengths(values=sim_mat[neg_pair_mask],
+                                                   row_lengths=tf.reduce_sum(tf.cast(neg_pair_mask, tf.int32), axis=1)
+                                                   )
+
+        return pos_mat, neg_mat
 
 
-def soft_dice_loss(y_true, y_pred):
-    return 1 - metrics.soft_dice_coef(y_true, y_pred)
+class MultiSimilarityLoss(PairBasedLoss):
+    def __init__(self, pos_scale=2.0, neg_scale=40.0, threshold=0.5, miner=_MSMiner(margin=0.1), name="multi_similarity_loss"):
+        super().__init__(name=name)
+        self.pos_scale = pos_scale
+        self.neg_scale = neg_scale
+        self.threshold = threshold
+        self.miner = miner
 
-def soft_dice_loss_no_bg(y_true, y_pred):
-    dice_coefs = metrics.soft_dice_coef_channelwise(y_true, y_pred)[1:]
+    def call(self, y_true, y_pred):
+        sim_mat = self.compute_similarity_matrix(y_true, y_pred)
 
-    # weighting 2
-    n_classes = tf.keras.backend.int_shape(dice_coefs)[0]
-    scale = 0.4 / n_classes
-    dice_coefs = scale * dice_coefs
+        # split similarity matrix into similarites for positive pairs and similarities for negative pairs
+        pos_mat, neg_mat = self.get_signed_pairs(sim_mat, y_true, remove_positive_diag=True)
 
-    return tf.reduce_sum(1 - dice_coefs)
+        if self.miner is not None:
+            # Mine for informative pairs
+            pos_mat, neg_mat = self.miner.mine(pos_mat, neg_mat)
 
+        pos_loss = tf.math.log(1 + tf.reduce_sum(tf.exp(-self.pos_scale * (pos_mat - self.threshold)), axis=1)) / self.pos_scale
+        neg_loss = tf.math.log(1 + tf.reduce_sum(tf.exp(self.neg_scale * (neg_mat - self.threshold)), axis=1)) / self.neg_scale
 
-def cross_entropy_with_dice_coef(y_true, y_pred):
-    cross_entropy_loss = tf.keras.losses.categorical_crossentropy(y_true, y_pred)
-    dice_loss = soft_dice_loss(y_true, y_pred)
-    return tf.keras.backend.mean(cross_entropy_loss) + dice_loss
+        ms_loss = pos_loss + neg_loss
 
+        return tf.reduce_mean(ms_loss)
 
-def cross_entropy_with_dice_coef_no_bg(y_true, y_pred):
-    cross_entropy_loss = tf.keras.losses.categorical_crossentropy(y_true, y_pred)
-    dice_loss = soft_dice_loss_no_bg(y_true, y_pred)
-
-    # weighting 1
-    #return tf.keras.backend.mean(cross_entropy_loss) + dice_loss
-
-    # weighting 2
-    return tf.keras.backend.mean(cross_entropy_loss) * 0.6 + dice_loss
+    def compute_similarity_matrix(self, y_true, y_pred):
+        return tf.matmul(y_pred, tf.transpose(y_pred))

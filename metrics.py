@@ -1,147 +1,166 @@
 import tensorflow as tf
 
 
-def top_2_categorical_accuracy(y_true, y_pred):
-    y_true_flat = tf.reshape(y_true, [-1])
-    y_pred_flat = tf.reshape(y_pred, [-1])
-
-    return tf.keras.metrics.top_k_categorical_accuracy(y_true_flat, y_pred_flat, k=2)
-
-
-def soft_dice_coef(y_true, y_pred):
-    """
-
-
-    :param y_true: Tensor of true target
-    :param y_pred: Tensor of predictions
-    :return: float scalar
-    """
-    smooth = 1e-5
-
-    intersection = tf.reduce_sum(y_true * y_pred)
-    batch_dsc = (2. * intersection + smooth) / (tf.reduce_sum(y_true) + tf.reduce_sum(y_pred) + smooth)
-    return batch_dsc
-
-
-def soft_dice_coef_channelwise(y_true, y_pred):
-    axis = (1, 2)
-    smooth = 1e-5
-
-    intersection = tf.reduce_sum(y_true * y_pred, axis=axis)
-    batch_dsc = (2. * intersection + smooth) / (tf.reduce_sum(y_true, axis=axis) + tf.reduce_sum(y_pred, axis=axis) + smooth)
-    return tf.reduce_mean(batch_dsc, axis=0)
-
-
-def hard_dice_coef(y_true, y_pred):
-    smooth = 1e-5
-    y_true_h = tf.round(y_true)
-    y_pred_h = tf.round(y_pred)
-    intersection = tf.reduce_sum(y_true_h * y_pred_h)
-    batch_coef = (2. * intersection + smooth) / (tf.reduce_sum(y_true_h) + tf.reduce_sum(y_pred_h) + smooth)
-    return batch_coef
-
-
-def hard_dice_coef_channelwise(y_true, y_pred):
-    smooth = 1e-5
-    axis = (1, 2)
-    y_true_h = tf.round(y_true)
-    y_pred_h = tf.round(y_pred)
-    intersection = tf.reduce_sum(y_true_h * y_pred_h, axis=axis)
-    batch_coef = (2. * intersection + smooth) / (
-                tf.reduce_sum(y_true_h, axis=axis) + tf.reduce_sum(y_pred_h, axis=axis) + smooth)
-    return tf.reduce_mean(batch_coef, axis=0)
-
-
-def overall_iou(y_true, y_pred):
-    threshold = 0.5
-    smooth = 1e-5
-
-    y_pred_thresh = tf.cast(y_pred > threshold, dtype=tf.float32)
-    y_true_thresh = tf.cast(y_true > threshold, dtype=tf.float32)
-    intersection = tf.reduce_sum(tf.multiply(y_pred_thresh, y_true_thresh))
-    union = tf.reduce_sum(tf.cast(tf.add(y_pred_thresh, y_true_thresh) >= 1, dtype=tf.float32))
-
-    batch_iou = (intersection + smooth) / (union + smooth)
-    batch_iou = tf.reduce_mean(batch_iou)
-    return batch_iou
+# from .utils.ranking_utils import score_matrix_to_binary_ranking
+#
+#
+# class GlobalMeanAveragePrecision(tf.keras.metrics.Metric):
+#     def __init__(self, max_samples, dim, name="ranking_metrics"):
+#         super().__init__(name=name)
+#         self.max_samples = max_samples
+#         self.dim = dim
+#         self.y_preds = self.add_weight(shape=(max_samples, dim), name="y_preds")
+#         self.y_trues = self.add_weight(shape=(max_samples, 1), name="y_trues")
+#         self.n_trues = self.add_weight(name="n_trues", dtype=tf.int64, initializer="zeros")
+#         self.n_preds = self.add_weight(name="n_preds", dtype=tf.int64, initializer="zeros")
+#
+#     def update_state(self, y_true, y_pred, sample_weight=None):
+#         n_true = tf.cast(tf.shape(y_true)[0], tf.int64)
+#         n_pred = tf.cast(tf.shape(y_pred)[0], tf.int64)
+#
+#         tf.print(n_true)
+#         tf.print(n_pred)
+#
+#         true_current = self._get_current_trues()
+#         true_fill = tf.zeros((self.max_samples - (self.n_trues + n_true), 1))
+#         self.y_trues.assign(tf.concat([true_current, true_fill], axis=0))
+#
+#         pred_current = self._get_current_preds()
+#         pred_fill = tf.zeros((self.max_samples - (self.n_preds + n_pred), self.dim))
+#         self.y_preds.assign(tf.concat([pred_current, pred_fill], axis=0))
+#
+#         self.n_trues.assign_add(n_true)
+#         self.n_preds.assign_add(n_pred)
+#
+#     def reset_states(self):
+#         self.y_trues.assign(tf.zeros_like(self.y_trues))
+#         self.y_preds.assign(tf.zeros_like(self.y_preds))
+#
+#     def result(self, k=10):
+#         y_trues = self._get_current_trues()
+#         y_preds = self._get_current_preds()
+#
+#         score_mat = tf.matmul(y_preds, tf.transpose(y_preds))
+#         score_mat = score_matrix_to_binary_ranking(score_mat, y_trues, remove_diag=True)
+#         return mean_average_precision(score_mat, k)
+#
+#     def _get_current_trues(self):
+#         return tf.slice(self.y_trues, [0, 0], [self.n_trues, -1])
+#
+#     def _get_current_preds(self):
+#         return tf.slice(self.y_preds, [0, 0], [self.n_preds, -1])
 
 
-def iou_channelwise(y_true, y_pred):
-    threshold = 0.5
-    axis = (1, 2)
-    smooth = 1e-5
-
-    y_pred_tresh = tf.cast(y_pred > threshold, dtype=tf.float32)
-    y_true_thresh = tf.cast(y_true > threshold, dtype=tf.float32)
-    intersection = tf.reduce_sum(tf.multiply(y_pred_tresh, y_true_thresh), axis=axis)
-    union = tf.reduce_sum(tf.cast(tf.add(y_pred_tresh, y_true_thresh) >= 1, dtype=tf.float32), axis=axis)
-
-    batch_iou = (intersection + smooth) / (union + smooth)
-    return tf.reduce_mean(batch_iou, axis=0)
-
-
-def mean_class_iou(y_true, y_pred):
-    iou_coef = iou_channelwise(y_true, y_pred)[1:]
-    return tf.reduce_mean(iou_coef)
-
-
-def particle_iou(y_true, y_pred):
-    return iou_channelwise(y_true, y_pred)[1]
-
-
-def true_positive(y_true, y_pred):
-    y_true = tf.reshape(tf.argmax(y_true, -1), [-1, 1])
-    y_pred = tf.reshape(tf.argmax(y_pred, -1), [-1, 1])
-
-    tp = tf.count_nonzero(y_true * y_pred)
-    return tf.cast(tp, dtype=tf.float32)
+# class GlobalMeanAveragePrecision():
+#     def __init__(self, dataset: tf.data.Dataset, model):
+#         self.dataset = dataset
+#         self.model = model
+#         self.features = None
+#         self.labels = None
+#
+#     def mean_average_precision(self, y_true, y_pred):
+#         return 0.5
+#
+#     def _extract_features(self):
+#         features = []
+#         labels = []
+#         for x, y in self.dataset:
+#             feat = self.model(x)
+#             features.append(feat)
+#             labels.append(y)
+#
+#         self.features = tf.concat(features, axis=0)
+#         self.labels = tf.concat(labels, axis=0)
 
 
-def true_negative(y_true, y_pred):
-    y_true = tf.reshape(tf.argmax(y_true, -1), [-1, 1])
-    y_pred = tf.reshape(tf.argmax(y_pred, -1), [-1, 1])
+class RankingAccuracy:
 
-    tn = tf.count_nonzero((y_true - 1) * (y_pred - 1))
-    return tf.cast(tn, dtype=tf.float32)
+    def __call__(self, binary_ranking):
+        return ranking_accuracy(binary_ranking)
 
-
-def false_positive(y_true, y_pred):
-    y_true = tf.reshape(tf.argmax(y_true, -1), [-1, 1])
-    y_pred = tf.reshape(tf.argmax(y_pred, -1), [-1, 1])
-
-    fp = tf.count_nonzero((y_true - 1) * y_pred)
-    return tf.cast(fp, dtype=tf.float32)
+    @property
+    def __name__(self):
+        return "r_acc"
 
 
-def false_negative(y_true, y_pred):
-    y_true = tf.reshape(tf.argmax(y_true, -1), [-1, 1])
-    y_pred = tf.reshape(tf.argmax(y_pred, -1), [-1, 1])
+class RecallAtK:
+    def __init__(self, k):
+        self.k = k
 
-    fn = tf.count_nonzero(y_true * (y_pred - 1))
-    return tf.cast(fn, dtype=tf.float32)
+    def __call__(self, binary_ranking):
+        return recall_at_k(binary_ranking, self.k)
 
-
-def precision(y_true, y_pred):
-    smooth = tf.constant([0.00001], dtype=tf.float32)
-    tp = true_positive(y_true, y_pred)
-    fp = false_positive(y_true, y_pred)
-    pr = (tp + smooth) / (tp + fp + smooth)
-
-    return pr
+    @property
+    def __name__(self):
+        return "r@{}".format(self.k)
 
 
-def recall(y_true, y_pred):
-    smooth = tf.constant([0.00001], dtype=tf.float32)
-    tp = true_positive(y_true, y_pred)
-    fn = false_negative(y_true, y_pred)
-    rc = (tp + smooth) / (tp + fn + smooth)
+class PrecisionAtK:
+    def __init__(self, k):
+        self.k = k
 
-    return rc
+    def __call__(self, binary_ranking):
+        return precision_at_k(binary_ranking, self.k)
+
+    @property
+    def __name__(self):
+        return "p@{}".format(self.k)
 
 
-def f1(y_true, y_pred):
-    pr = precision(y_true, y_pred)
-    rc = recall(y_true, y_pred)
-    f1_ = (2 * pr * rc) / (pr + rc)
+class MeanAveragePrecisionAtK:
+    def __init__(self, k):
+        self.k = k
 
-    return f1_
+    def __call__(self, binary_ranking):
+        return mean_average_precision(binary_ranking, self.k)
+
+    @property
+    def __name__(self):
+        return "map@{}".format(self.k)
+
+
+class MeanAveragePrecision:
+
+    def __call__(self, binary_ranking):
+        return mean_average_precision(binary_ranking, None)
+
+    @property
+    def __name__(self):
+        return "map"
+
+
+@tf.function
+def ranking_accuracy(binary_ranking):
+    n_true_pos = tf.cast(tf.reduce_sum(binary_ranking, axis=1), tf.int32)
+    nrows = tf.shape(binary_ranking)[0]
+    accs = tf.TensorArray(dtype=tf.float32, size=nrows, element_shape=tf.TensorShape(dims=()))
+    for i in tf.range(nrows):
+        ki = tf.slice(n_true_pos, [i], [1])[0]
+        n_pred_pos = tf.reduce_sum(tf.slice(binary_ranking, [i, 0], [1, ki]))
+        acc = n_pred_pos / tf.cast(ki, tf.float32)
+        accs = accs.write(i, acc)
+    return tf.reduce_mean(accs.stack())
+
+
+def recall_at_k(binary_ranking, k):
+    return tf.reduce_mean(tf.cast(tf.reduce_sum(binary_ranking[:, :k], axis=1) > 0, tf.float32))
+
+
+def precision_at_k(binary_ranking, k):
+    precisions_at_k = tf.reduce_sum(binary_ranking[:, :k], axis=1) / k
+    return tf.reduce_mean(precisions_at_k)
+
+
+# @tf.function
+def mean_average_precision(binary_ranking, k=None):
+    if k is None:
+        k = tf.shape(binary_ranking)[1]
+
+    binary_ranking = binary_ranking[:, :k]
+    n_positive_predictions = tf.reduce_sum(binary_ranking, axis=1)
+    rank_out_of_k = tf.range(1, k + 1, dtype=tf.float32)
+
+    cumulative_positive_at_k = tf.cumsum(binary_ranking, axis=1) * binary_ranking
+    k_precisions = tf.math.divide_no_nan(cumulative_positive_at_k, rank_out_of_k)
+    average_precision_at_k = tf.math.divide_no_nan(tf.reduce_sum(k_precisions, axis=1), n_positive_predictions)
+    return tf.reduce_mean(average_precision_at_k)

@@ -82,7 +82,7 @@ def resize(x, height, width):
 
 
 @tf.function
-def resnet_normalize(x):
+def resnet_imagenet_normalize(x):
     # RGB -> BGR
     x = x[..., ::-1]
 

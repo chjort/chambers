@@ -4,7 +4,6 @@ import tensorflow as tf
 def remove_diagonal(mat):
     n = tf.shape(mat)[0]
     m = tf.shape(mat)[1]
-    # tf.assert_equal(n, m, "Input must be a square matrix.")
 
     diag_mask = tf.ones_like(mat, dtype=tf.bool)
     diag_mask = tf.linalg.set_diag(diag_mask, tf.cast(tf.zeros([n]), tf.bool))

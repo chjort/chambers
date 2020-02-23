@@ -1,11 +1,11 @@
-from tensorflow.keras.layers import Flatten, ReLU, Input, GlobalAveragePooling2D, GlobalMaxPooling2D, Dense, Conv2D
+from tensorflow.keras.layers import Flatten, ReLU, Input, GlobalAveragePooling2D, GlobalMaxPooling2D, Dense
 from tensorflow.keras.models import Model
 
 from .backbones import ResNet50_ImageNet, BN_Inception
 from ..layers import ConvBlock, GlobalGeneralizedMean, L2Normalization
 
 
-def BN_Inception_DenseL2(input_shape=None, freeze_layers=False):
+def BN_Inception_SPoC(input_shape=None, freeze_layers=False):
     bn_inception = BN_Inception(input_shape, freeze_layers)
     x = GlobalAveragePooling2D()(bn_inception.output)
     x = Dense(units=512)(x)
@@ -15,22 +15,12 @@ def BN_Inception_DenseL2(input_shape=None, freeze_layers=False):
     return model
 
 
-def ResNet50_DenseL2(input_shape=None, freeze_layers=False):
-    resnet = ResNet50_ImageNet(input_shape, freeze_layers, include_top=False)
-    x = GlobalAveragePooling2D()(resnet.output)
-    x = Dense(units=512)(x)
-    x = L2Normalization(axis=1)(x)
-
-    model = Model(inputs=resnet.input, outputs=x, name="ResNet50_DenseL2")
-    return model
-
-
 def ResNet50_MAC(input_shape=None, freeze_layers=False):
     resnet = ResNet50_ImageNet(input_shape, freeze_layers)
 
-    x = ReLU()(resnet.output)
-    x = GlobalMaxPooling2D()(x)
-    x = Dense(1536)(x)
+    # x = ReLU()(resnet.output)
+    x = GlobalMaxPooling2D()(resnet.output)
+    x = Dense(512)(x)
     x = L2Normalization(axis=1)(x)
 
     model = Model(inputs=resnet.input, outputs=x, name="ResNet50_MAC")
@@ -40,9 +30,9 @@ def ResNet50_MAC(input_shape=None, freeze_layers=False):
 def ResNet50_SPoC(input_shape=None, freeze_layers=False):
     resnet = ResNet50_ImageNet(input_shape, freeze_layers)
 
-    x = ReLU()(resnet.output)
-    x = GlobalAveragePooling2D()(x)
-    x = Dense(1536)(x)
+    # x = ReLU()(resnet.output)
+    x = GlobalAveragePooling2D()(resnet.output)
+    x = Dense(512)(x)
     x = L2Normalization(axis=1)(x)
 
     model = Model(inputs=resnet.input, outputs=x, name="ResNet50_SPoC")
@@ -60,14 +50,15 @@ def ResNet50_GeM(input_shape=None, freeze_layers=False):
     """
     resnet = ResNet50_ImageNet(input_shape, freeze_layers)
 
-    x = ReLU()(resnet.output)
-    x = GlobalGeneralizedMean(p=3, trainable=False)(x)
-    x = Dense(1536)(x)
+    # x = ReLU()(resnet.output)
+    x = GlobalGeneralizedMean(p=3, trainable=False)(resnet.output)
+    x = Dense(512)(x)
     x = L2Normalization(axis=1)(x)
 
     model = Model(inputs=resnet.input, outputs=x, name="ResNet50_GeM")
 
     return model
+
 
 def CNN(input_shape=None):
     """

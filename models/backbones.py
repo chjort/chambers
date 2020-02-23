@@ -1,10 +1,11 @@
 import os
-from tensorflow.keras.applications import ResNet50 as ResNet50_Keras
-from tensorflow.keras.models import load_model
+
+import tensorflow as tf
+
 
 def BN_Inception(input_shape=None, freeze_layers=False):
     model_path = os.path.expanduser("~/.keras/models/BN-Inception_notop.h5")
-    model = load_model(model_path, compile=False)
+    model = tf.keras.models.load_model(model_path, compile=False)
 
     if freeze_layers:
         for layer in model.layers:
@@ -22,7 +23,7 @@ def ResNet50_ImageNet(input_shape=None, freeze_layers=False, include_top=False):
     :param freeze_layers: If True all parameters of the convolutional layers are untrainable.
     :return: tensorflow.keras.Model
     """
-    resnet = ResNet50_Keras(input_shape=input_shape, weights="imagenet", include_top=include_top)
+    resnet = tf.keras.applications.ResNet50(input_shape=input_shape, weights="imagenet", include_top=include_top)
     if freeze_layers:
         for layer in resnet.layers:
             layer.trainable = False

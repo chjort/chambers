@@ -1,6 +1,5 @@
 import glob
 import os
-import shutil
 from urllib.request import urlopen, Request
 
 import cv2
@@ -45,30 +44,3 @@ def imshow(img, axis=True):
     if not axis:
         plt.axis("off")
     plt.show()
-
-
-def dataset_to_retrieval(dataset):
-    dataset_path = os.path.split(dataset)[0]
-    db_path = os.path.join(dataset_path, "db")
-    query_path = os.path.join(dataset_path, "query")
-
-    class_dirs = glob.glob(os.path.join(dataset, "*/"), recursive=True)
-    for class_dir in class_dirs:
-        files = glob.glob(os.path.join(class_dir, "*.png")) + glob.glob(os.path.join(class_dir, "*.jpg"))
-        np.random.shuffle(files)
-        query_file = files[0]
-
-        query_class, query_filename = query_file.split(os.sep)[-2:]
-        query_class_dst = os.path.join(query_path, query_class)
-        query_file_dst = os.path.join(query_class_dst, query_filename)
-        if not os.path.exists(query_class_dst):
-            os.makedirs(query_class_dst)
-        shutil.copyfile(query_file, query_file_dst)
-
-        for db_file in files:
-            db_class, db_filename = db_file.split(os.sep)[-2:]
-            db_class_dst = os.path.join(db_path, db_class)
-            db_file_dst = os.path.join(db_class_dst, db_filename)
-            if not os.path.exists(db_class_dst):
-                os.makedirs(db_class_dst)
-            shutil.copyfile(db_file, db_file_dst)

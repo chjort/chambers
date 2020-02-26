@@ -11,7 +11,7 @@ def BN_Inception_SPoC(input_shape=None, freeze_layers=False):
     x = Dense(units=512)(x)
     x = L2Normalization(axis=1)(x)
 
-    model = Model(inputs=bn_inception.input, outputs=x, name="BN_Inception_DenseL2")
+    model = Model(inputs=bn_inception.input, outputs=x, name="BN_Inception_SPoC")
     return model
 
 

@@ -1,7 +1,7 @@
 import numpy as np
 import tensorflow as tf
 
-from .utils.ranking_utils import score_matrix_to_binary_ranking
+from .utils.ranking import score_matrix_to_binary_ranking
 
 
 class GlobalRankingMetricCallback(tf.keras.callbacks.Callback):

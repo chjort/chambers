@@ -1,6 +1,6 @@
 import tensorflow as tf
 
-from .tf_utils import arg_to_gather_nd
+from .tf import arg_to_gather_nd
 
 
 def score_matrix_to_binary_ranking(score_matrix, query_labels, all_labels, remove_top1=False):

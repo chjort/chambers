@@ -1,4 +1,2 @@
-tensorflow-gpu==2.0.0
-matplotlib
+tensorflow
 numpy
-opencv-python

@@ -17,17 +17,17 @@ def random_flip_left_right(x, seed=None):
 
 @tf.function
 def random_crop(x, height, width, seed=None):
-    images_rank = x.shape.ndims
+    x_rank = x.shape.ndims
 
-    if images_rank == 4:
+    if x_rank == 4:
         n = x.shape[0]
-        c = x.shape[3]
-        cropped_x = tf.image.random_crop(x, [n, height, width, c], seed=seed)
-    elif images_rank == 3:
-        c = x.shape[2]
-        cropped_x = tf.image.random_crop(x, [height, width, c], seed=seed)
+        channels = x.shape[3]
+        cropped_x = tf.image.random_crop(x, [n, height, width, channels], seed=seed)
+    elif x_rank == 3:
+        channels = x.shape[2]
+        cropped_x = tf.image.random_crop(x, [height, width, channels], seed=seed)
     else:
-        raise ValueError("Input must have rank of 3 or 4.")
+        raise ValueError("Input must have rank of 3 or 4. Found rank {}".format(x_rank))
 
     return cropped_x
 
@@ -51,7 +51,7 @@ def center_crop(x, height, width):
         cropped_x = tf.image.crop_to_bounding_box(x, offset_height=offset_h, offset_width=offset_w,
                                                   target_height=height, target_width=width)
     else:
-        raise ValueError("Input must have rank of 3 or 4. Had rank")
+        raise ValueError("Input must have rank of 3 or 4. Found rank {}".format(x_rank))
 
     return cropped_x
 

@@ -76,6 +76,9 @@ class InterleaveDataset(ABC):
     def cache(self, filename=""):
         self.dataset = self.dataset.cache(filename)
 
+    def map(self, func, args=(), kwargs={}):
+        self.dataset = self.dataset.map(lambda x: func(x, *args, **kwargs))
+
     @abstractmethod
     def interleave_map(self, *args, **kwargs):
         pass
@@ -140,9 +143,8 @@ class LabeledImageDataset(InterleaveDataset):
         labels = tf.tile([label], [n_files])
         return tf.data.Dataset.from_tensor_slices((class_images, labels))
 
-    def apply_augmentation(self, func, args=(), kwargs={}):
+    def map(self, func, args=(), kwargs={}):
         self.dataset = self.dataset.map(lambda images, labels: (func(images, *args, **kwargs), labels))
-
 
 class RandomLabeledImageDataset(LabeledImageDataset):
     """

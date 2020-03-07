@@ -1,5 +1,5 @@
 import tensorflow as tf
-from .miners import MultiSimilarityMiner as _MSMiner
+from ..miners import MultiSimilarityMiner as _MSMiner
 import abc
 
 

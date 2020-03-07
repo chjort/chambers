@@ -1,4 +1,30 @@
+from typing import List
+
 import tensorflow as tf
+from tensorflow.python.keras.metrics import MeanMetricWrapper
+from .losses import soft_dice_coefficient
+from .losses import hard_dice_coefficient
+
+
+class SoftDiceCoefficient(MeanMetricWrapper):
+    def __init__(self, channel_mask: List[bool] = None, name="soft_dice_coefficient", dtype=None):
+        def dsc(y_true, y_pred, channel_mask):
+            return tf.abs(soft_dice_coefficient(y_true, y_pred, channel_mask) - 1)
+
+        super().__init__(dsc, name=name, dtype=dtype, channel_mask=channel_mask)
+
+
+class HardDiceCoefficient(MeanMetricWrapper):
+    def __init__(self, channel_mask: List[bool] = None, name="hard_dice_coefficient", dtype=None):
+        def dhc(y_true, y_pred, channel_mask):
+            return tf.abs(hard_dice_coefficient(y_true, y_pred, channel_mask) - 1)
+
+        super().__init__(dhc, name=name, dtype=dtype, channel_mask=channel_mask)
+
+
+class IntersectionOverUnion(MeanMetricWrapper):
+    def __init__(self, channel_mask: List[bool] = None, name="intersection_over_union", dtype=None):
+        super().__init__(intersection_over_union, name=name, dtype=dtype, channel_mask=channel_mask)
 
 
 # from .utils.ranking_utils import score_matrix_to_binary_ranking
@@ -84,7 +110,7 @@ class RankingAccuracy:
 
 
 class RecallAtK:
-    def __init__(self, k):
+    def __init__(self, k: int):
         self.k = k
 
     def __call__(self, binary_ranking):
@@ -96,7 +122,7 @@ class RecallAtK:
 
 
 class PrecisionAtK:
-    def __init__(self, k):
+    def __init__(self, k: int):
         self.k = k
 
     def __call__(self, binary_ranking):
@@ -108,7 +134,7 @@ class PrecisionAtK:
 
 
 class MeanAveragePrecisionAtK:
-    def __init__(self, k):
+    def __init__(self, k: int):
         self.k = k
 
     def __call__(self, binary_ranking):
@@ -142,17 +168,16 @@ def ranking_accuracy(binary_ranking):
     return tf.reduce_mean(accs.stack())
 
 
-def recall_at_k(binary_ranking, k):
+def recall_at_k(binary_ranking, k: int):
     return tf.reduce_mean(tf.cast(tf.reduce_sum(binary_ranking[:, :k], axis=1) > 0, tf.float32))
 
 
-def precision_at_k(binary_ranking, k):
+def precision_at_k(binary_ranking, k: int):
     precisions_at_k = tf.reduce_sum(binary_ranking[:, :k], axis=1) / k
     return tf.reduce_mean(precisions_at_k)
 
 
-# @tf.function
-def mean_average_precision(binary_ranking, k=None):
+def mean_average_precision(binary_ranking, k: int = None):
     if k is None:
         k = tf.shape(binary_ranking)[1]
 
@@ -164,3 +189,32 @@ def mean_average_precision(binary_ranking, k=None):
     k_precisions = tf.math.divide_no_nan(cumulative_positive_at_k, rank_out_of_k)
     average_precision_at_k = tf.math.divide_no_nan(tf.reduce_sum(k_precisions, axis=1), n_positive_predictions)
     return tf.reduce_mean(average_precision_at_k)
+
+
+def intersection_over_union(y_true, y_pred, channel_mask: List[bool] = None):
+    threshold = 0.5
+    axis = (1, 2)
+    eps = tf.keras.backend.epsilon()
+
+    y_pred_tresh = tf.cast(y_pred > threshold, dtype=tf.float32)
+    y_true_thresh = tf.cast(y_true > threshold, dtype=tf.float32)
+    intersection = tf.reduce_sum(tf.multiply(y_pred_tresh, y_true_thresh), axis=axis)
+    union = tf.reduce_sum(tf.cast(tf.add(y_pred_tresh, y_true_thresh) >= 1, dtype=tf.float32), axis=axis)
+
+    channel_iou = (intersection + eps) / (union + eps)
+
+    if channel_mask is not None:
+        channel_mask = tf.convert_to_tensor(channel_mask)
+        indices = tf.range(tf.shape(channel_iou)[1])
+        channel_iou = tf.gather(channel_iou, indices[channel_mask], axis=1)
+
+    sample_iou = tf.reduce_mean(channel_iou, axis=1)
+    batch_iou = tf.reduce_mean(sample_iou, axis=0)
+    return batch_iou
+
+
+# Aliases
+map = MAP = mean_average_precision
+iou = IOU = intersection_over_union
+dsc = DSC = soft_dice_coefficient
+dhc = DHC = hard_dice_coefficient

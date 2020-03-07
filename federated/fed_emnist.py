@@ -1,7 +1,6 @@
 import tensorflow as tf
 import tensorflow_federated as tff
 
-
 # %%
 def preprocess(dataset):
     batch_size = 20
@@ -26,7 +25,8 @@ client_ids = train_data.client_ids[:10]
 fed_data = make_federated_data(train_data, client_ids)
 
 sample_batch = next(iter(fed_data[0]))
-
+# sample_batch = (tf.zeros(shape=(20, 784), dtype=tf.float32),
+#                 tf.zeros(shape=(20,), dtype=tf.float32))
 
 # %%
 def MLP():

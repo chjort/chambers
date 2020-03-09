@@ -2,29 +2,199 @@ from typing import List
 
 import tensorflow as tf
 from tensorflow.python.keras.metrics import MeanMetricWrapper
-from .losses import soft_dice_coefficient
-from .losses import hard_dice_coefficient
+
+from .losses import soft_dice_coefficient as _dsc
+
+
+class F1(tf.keras.metrics.Metric):
+    def __init__(self, thresholds=None, top_k=None, class_id=None, name=None, dtype=None):
+        super(F1, self).__init__(name=name, dtype=dtype)
+        self.thresholds = thresholds
+        self.top_k = top_k
+        self.class_id = class_id
+        self.precision = tf.keras.metrics.Precision(thresholds=self.thresholds,
+                                                    top_k=self.top_k,
+                                                    class_id=self.class_id,
+                                                    name=name,
+                                                    dtype=dtype
+                                                    )
+        self.recall = tf.keras.metrics.Recall(thresholds=self.thresholds,
+                                              top_k=self.top_k,
+                                              class_id=self.class_id,
+                                              name=name,
+                                              dtype=dtype
+                                              )
+
+    def update_state(self, y_true, y_pred, sample_weight=None):
+        self.precision.update_state(y_true, y_pred, sample_weight=sample_weight)
+        self.recall.update_state(y_true, y_pred, sample_weight=sample_weight)
+
+    def result(self):
+        precision = self.precision.result()
+        recall = self.recall.result()
+        f1 = (2 * precision * recall) / (precision + recall)
+        return f1
+
+    def reset_states(self):
+        self.precision.reset_states()
+        self.recall.reset_states()
+
+    def get_config(self):
+        config = {
+            'thresholds': self.thresholds,
+            'top_k': self.top_k,
+            'class_id': self.class_id
+        }
+        base_config = super(F1, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
+
+
+class IntersectionOverUnion(tf.keras.metrics.Metric):
+    """Computes the mean Intersection-Over-Union metric.
+    Mean Intersection-Over-Union is a common evaluation metric for semantic image
+    segmentation, which first computes the IOU for each semantic class and then
+    computes the average over classes. IOU is defined as follows:
+      IOU = true_positive / (true_positive + false_positive + false_negative).
+    The predictions are accumulated in a confusion matrix, weighted by
+    `sample_weight` and the metric is then calculated from it.
+    If `sample_weight` is `None`, weights default to 1.
+    Use `sample_weight` of 0 to mask values.
+    Usage:
+    ```python
+    m = tf.keras.metrics.MeanIoU(num_classes=2)
+    m.update_state([0, 0, 1, 1], [0, 1, 0, 1])
+      # cm = [[1, 1],
+              [1, 1]]
+      # sum_row = [2, 2], sum_col = [2, 2], true_positives = [1, 1]
+      # iou = true_positives / (sum_row + sum_col - true_positives))
+      # result = (1 / (2 + 2 - 1) + 1 / (2 + 2 - 1)) / 2 = 0.33
+    print('Final result: ', m.result().numpy())  # Final result: 0.33
+    ```
+    Usage with tf.keras API:
+    ```python
+    model = tf.keras.Model(inputs, outputs)
+    model.compile(
+      'sgd',
+      loss='mse',
+      metrics=[tf.keras.metrics.MeanIoU(num_classes=2)])
+    ```
+    """
+
+    def __init__(self, num_classes: int, exclude_classes: List[int] = None, onehot_encoded: bool = False,
+                 name: str = "intersection_over_union", dtype=None):
+        """Creates a `IntersectionOverUnion` instance.
+        Args:
+          num_classes: The possible number of labels the prediction task can have.
+            This value must be provided, since a confusion matrix of dimension =
+            [num_classes, num_classes] will be allocated.
+          name: (Optional) string name of the metric instance.
+          dtype: (Optional) data type of the metric result.
+        """
+        super().__init__(name=name, dtype=dtype)
+        self.num_classes = num_classes
+        self.exclude_classes = exclude_classes
+        self.onehot_encoded = onehot_encoded
+
+        if self.exclude_classes is not None:
+            indices = tf.expand_dims(tf.convert_to_tensor(exclude_classes, dtype=tf.int32), -1)
+            updates = tf.zeros_like(exclude_classes, dtype=tf.bool)
+            self._class_mask = tf.ones([self.num_classes], dtype=tf.bool)
+            self._class_mask = tf.tensor_scatter_nd_update(self._class_mask, indices, updates)
+
+        # Variable to accumulate the predictions in the confusion matrix. Setting
+        # the type to be `float64` as required by confusion_matrix_ops.
+        self.total_cm = self.add_weight(
+            'total_confusion_matrix',
+            shape=(num_classes, num_classes),
+            initializer=tf.zeros_initializer,
+            dtype=tf.float64)
+
+    def update_state(self, y_true, y_pred, sample_weight=None):
+        """Accumulates the confusion matrix statistics.
+        Args:
+          y_true: The ground truth values.
+          y_pred: The predicted values.
+          sample_weight: Optional weighting of each example. Defaults to 1. Can be a
+            `Tensor` whose rank is either 0, or the same rank as `y_true`, and must
+            be broadcastable to `y_true`.
+        Returns:
+          Update op.
+        """
+
+        y_true = tf.cast(y_true, self._dtype)
+        y_pred = tf.cast(y_pred, self._dtype)
+
+        # Find class index with highest predicted probability, if inputs are onehot encoded
+        if self.onehot_encoded:
+            y_true = tf.argmax(y_true, -1)
+            y_pred = tf.argmax(y_pred, -1)
+
+        # Flatten the input if its rank > 1.
+        if y_pred.shape.ndims > 1:
+            y_pred = tf.reshape(y_pred, [-1])
+
+        if y_true.shape.ndims > 1:
+            y_true = tf.reshape(y_true, [-1])
+
+        if sample_weight is not None and sample_weight.shape.ndims > 1:
+            sample_weight = tf.reshape(sample_weight, [-1])
+
+        # Accumulate the prediction to current confusion matrix.
+        current_cm = tf.math.confusion_matrix(
+            y_true,
+            y_pred,
+            self.num_classes,
+            weights=sample_weight,
+            dtype=tf.float64)
+        return self.total_cm.assign_add(current_cm)
+
+    def result(self):
+        """Compute the mean intersection-over-union via the confusion matrix."""
+        sum_over_row = tf.cast(
+            tf.reduce_sum(self.total_cm, axis=0), dtype=self._dtype)
+        sum_over_col = tf.cast(
+            tf.reduce_sum(self.total_cm, axis=1), dtype=self._dtype)
+        true_positives = tf.cast(
+            tf.linalg.diag_part(self.total_cm), dtype=self._dtype)
+
+        if self.exclude_classes is not None:
+            sum_over_row = sum_over_row[self._class_mask]
+            sum_over_col = sum_over_col[self._class_mask]
+            true_positives = true_positives[self._class_mask]
+
+        false_positives = sum_over_col - true_positives
+        false_negatives = sum_over_row - true_positives
+
+        denominator = true_positives + false_positives + false_negatives
+        iou = tf.math.divide_no_nan(true_positives, denominator)
+
+        # The mean is only computed over classes that appear in the
+        # label or prediction tensor. If the denominator is 0, we need to
+        # ignore the class.
+        num_valid_entries = tf.reduce_sum(
+            tf.cast(tf.not_equal(denominator, 0), dtype=self._dtype))
+
+        return tf.math.divide_no_nan(
+            tf.reduce_sum(iou, name='mean_iou'), num_valid_entries)
+
+    def reset_states(self):
+        self.total_cm.assign(tf.zeros_like(self.total_cm))
+
+    def get_config(self):
+        config = {'num_classes': self.num_classes, "exclude_classes": self.class_mask,
+                  "onehot_encoded": self.onehot_encoded}
+        base_config = super().get_config()
+        return dict(list(base_config.items()) + list(config.items()))
 
 
 class SoftDiceCoefficient(MeanMetricWrapper):
-    def __init__(self, channel_mask: List[bool] = None, name="soft_dice_coefficient", dtype=None):
-        def dsc(y_true, y_pred, channel_mask):
-            return tf.abs(soft_dice_coefficient(y_true, y_pred, channel_mask) - 1)
+    def __init__(self, exclude_classes: List[int] = None, name="soft_dice_coefficient", dtype=None):
+        super().__init__(soft_dice_coefficient, name=name, dtype=dtype, exclude_classes=exclude_classes)
 
-        super().__init__(dsc, name=name, dtype=dtype, channel_mask=channel_mask)
-
-
-class HardDiceCoefficient(MeanMetricWrapper):
-    def __init__(self, channel_mask: List[bool] = None, name="hard_dice_coefficient", dtype=None):
-        def dhc(y_true, y_pred, channel_mask):
-            return tf.abs(hard_dice_coefficient(y_true, y_pred, channel_mask) - 1)
-
-        super().__init__(dhc, name=name, dtype=dtype, channel_mask=channel_mask)
-
-
-class IntersectionOverUnion(MeanMetricWrapper):
-    def __init__(self, channel_mask: List[bool] = None, name="intersection_over_union", dtype=None):
-        super().__init__(intersection_over_union, name=name, dtype=dtype, channel_mask=channel_mask)
+    def get_config(self):
+        config = {"exclude_classes": self.class_mask}
+        base_config = super().get_config()
+        return dict(list(base_config.items()) + list(config.items()))
 
 
 # from .utils.ranking_utils import score_matrix_to_binary_ranking
@@ -75,28 +245,6 @@ class IntersectionOverUnion(MeanMetricWrapper):
 #
 #     def _get_current_preds(self):
 #         return tf.slice(self.y_preds, [0, 0], [self.n_preds, -1])
-
-
-# class GlobalMeanAveragePrecision():
-#     def __init__(self, dataset: tf.data.Dataset, model):
-#         self.dataset = dataset
-#         self.model = model
-#         self.features = None
-#         self.labels = None
-#
-#     def mean_average_precision(self, y_true, y_pred):
-#         return 0.5
-#
-#     def _extract_features(self):
-#         features = []
-#         labels = []
-#         for x, y in self.dataset:
-#             feat = self.model(x)
-#             features.append(feat)
-#             labels.append(y)
-#
-#         self.features = tf.concat(features, axis=0)
-#         self.labels = tf.concat(labels, axis=0)
 
 
 class RankingAccuracy:
@@ -191,30 +339,10 @@ def mean_average_precision(binary_ranking, k: int = None):
     return tf.reduce_mean(average_precision_at_k)
 
 
-def intersection_over_union(y_true, y_pred, channel_mask: List[bool] = None):
-    threshold = 0.5
-    axis = (1, 2)
-    eps = tf.keras.backend.epsilon()
-
-    y_pred_tresh = tf.cast(y_pred > threshold, dtype=tf.float32)
-    y_true_thresh = tf.cast(y_true > threshold, dtype=tf.float32)
-    intersection = tf.reduce_sum(tf.multiply(y_pred_tresh, y_true_thresh), axis=axis)
-    union = tf.reduce_sum(tf.cast(tf.add(y_pred_tresh, y_true_thresh) >= 1, dtype=tf.float32), axis=axis)
-
-    channel_iou = (intersection + eps) / (union + eps)
-
-    if channel_mask is not None:
-        channel_mask = tf.convert_to_tensor(channel_mask)
-        indices = tf.range(tf.shape(channel_iou)[1])
-        channel_iou = tf.gather(channel_iou, indices[channel_mask], axis=1)
-
-    sample_iou = tf.reduce_mean(channel_iou, axis=1)
-    batch_iou = tf.reduce_mean(sample_iou, axis=0)
-    return batch_iou
+def soft_dice_coefficient(y_true, y_pred, exclude_classes: List[int] = None):
+    return tf.abs(_dsc(y_true, y_pred, exclude_classes=exclude_classes) - 1)
 
 
 # Aliases
 map = MAP = mean_average_precision
-iou = IOU = intersection_over_union
 dsc = DSC = soft_dice_coefficient
-dhc = DHC = hard_dice_coefficient

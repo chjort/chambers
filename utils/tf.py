@@ -1,4 +1,19 @@
+from typing import List
+
 import tensorflow as tf
+
+
+def remove_indices(x, indices: List[int], axis=0):
+    len_axis = tf.shape(x)[axis]
+
+    mask_indices = tf.expand_dims(tf.convert_to_tensor(indices, dtype=tf.int32), -1)
+    falses = tf.zeros_like(indices, dtype=tf.bool)
+    mask = tf.ones([len_axis], dtype=tf.bool)
+    mask = tf.tensor_scatter_nd_update(mask, mask_indices, falses)
+
+    keep_indices = tf.range(len_axis)[mask]
+    x = tf.gather(x, keep_indices, axis=axis)
+    return x
 
 
 def remove_diagonal(mat):

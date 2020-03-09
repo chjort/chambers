@@ -17,6 +17,7 @@ class PairBasedLoss(tf.keras.losses.Loss):
         neg_pair_mask = tf.logical_not(pos_pair_mask)
 
         if remove_positive_diag:
+            # TODO: Dont remove mirror pairs by removing diagonal. This is wrong, if similarity matrix is not square
             # remove mirror pairs
             diag_len = tf.shape(sim_mat)[0]
             pos_pair_mask = tf.linalg.set_diag(pos_pair_mask, tf.tile([False], [diag_len]))

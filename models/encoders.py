@@ -1,12 +1,12 @@
 from tensorflow.keras.layers import Flatten, ReLU, Input, GlobalAveragePooling2D, GlobalMaxPooling2D, Dense
 from tensorflow.keras.models import Model
 
-from .backbones import ResNet50_ImageNet, BN_Inception
+from .backbones import ResNet50_ImageNet, BN_Inception_ImageNet
 from ..layers import ConvBlock, GlobalGeneralizedMean, L2Normalization
 
 
 def BN_Inception_SPoC(input_shape=None, freeze_layers=False):
-    bn_inception = BN_Inception(input_shape, freeze_layers)
+    bn_inception = BN_Inception_ImageNet(input_shape, freeze_layers)
     x = GlobalAveragePooling2D()(bn_inception.output)
     x = Dense(units=512)(x)
     x = L2Normalization(axis=1)(x)

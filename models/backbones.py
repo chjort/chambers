@@ -1,10 +1,12 @@
-import os
-
 import tensorflow as tf
 
 
-def BN_Inception(input_shape=None, freeze_layers=False):
-    model_path = os.path.expanduser("~/.keras/models/BN-Inception_notop.h5")
+def BN_Inception_ImageNet(input_shape=None, freeze_layers=False):
+    model_path = tf.keras.utils.get_file("BN-Inception_notop.h5",
+                                         "https://drive.google.com/uc?export=download&id=1eqId67njyNaTe3G2mqjb2fWtGE_5XotY",
+                                         cache_subdir='models',
+                                         file_hash="7eb8291a8e70fccbccc3bc2fff83311b35d2194ee584c1f1335bb9a240b94145",
+                                         hash_algorithm="sha256")
     model = tf.keras.models.load_model(model_path, compile=False)
 
     if freeze_layers:

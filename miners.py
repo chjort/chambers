@@ -1,21 +1,32 @@
-import tensorflow as tf
 from abc import ABC, abstractmethod
 
+import tensorflow as tf
+from tensorflow.python.keras import backend as K
+from tensorflow.python.keras.utils import tf_utils
+
+
 class Miner(ABC):
-    def __init__(self, name):
+    def __init__(self, name=None):
         self.name = name
 
+    def __call__(self, positive, negative):
+        scope_name = self.name
+        graph_ctx = tf_utils.graph_context_for_symbolic_tensors(
+            positive, negative)
+        with K.name_scope(scope_name or self.__class__.__name__), graph_ctx:
+            return self.call(positive, negative)
+
     @abstractmethod
-    def mine(self, positive, negative):
+    def call(self, positive, negative):
         pass
 
 
 class MultiSimilarityMiner(Miner):
     def __init__(self, margin, name="multi_similarity_miner"):
-            super().__init__(name=name)
-            self.margin = margin
+        super().__init__(name=name)
+        self.margin = margin
 
-    def mine(self, positive, negative):
+    def call(self, positive, negative):
         pos_thresh = tf.reduce_max(negative, axis=1) + self.margin
         neg_thresh = tf.reduce_min(positive, axis=1) - self.margin
 

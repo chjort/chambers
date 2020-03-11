@@ -77,7 +77,8 @@ class InterleaveDataset(ABC):
         self.dataset = self.dataset.cache(filename)
 
     def map(self, func, args=(), kwargs={}):
-        self.dataset = self.dataset.map(lambda x: func(x, *args, **kwargs))
+        self.dataset = self.dataset.map(lambda x: func(x, *args, **kwargs),
+                                        num_parallel_calls=N_PARALLEL)
 
     @abstractmethod
     def interleave_map(self, *args, **kwargs):
@@ -93,24 +94,20 @@ class LabeledImageDataset(InterleaveDataset):
     """
 
     def __init__(self, image_class_dirs: list, labels: list, class_cycle_length, images_per_class_cycle,
-                 resize_shape=(224, 224), sample_random=False, **kwargs):
+                 sample_random=False, **kwargs):
         """
         :param image_class_dirs: list of class directories containing image files
         :param labels: list of labels for each class
         :param class_cycle_length: number of classes per cycle
         :param images_per_class_cycle: number of images per class in a cycle
-        :param resize_shape: tuple of height and width to resize images to
         :param sample_random: Boolean. If true, will uniformly sample the images per class at random
         """
         self.sample_random = sample_random
-        super().__init__((image_class_dirs, labels), cycle_length=class_cycle_length, block_length=images_per_class_cycle,
+        super().__init__((image_class_dirs, labels), cycle_length=class_cycle_length,
+                         block_length=images_per_class_cycle,
                          **kwargs)
 
-        self.dataset = self.dataset.map(lambda file, label: (read_and_decode(file), label),
-                                        num_parallel_calls=N_PARALLEL)
-        height, width = resize_shape
-        self.dataset = self.dataset.map(lambda img, label: (resize(img, height, width), label),
-                                        num_parallel_calls=N_PARALLEL)
+        self.map(read_and_decode)
 
     @tf.function
     def interleave_map(self, input_dir, label):
@@ -144,7 +141,9 @@ class LabeledImageDataset(InterleaveDataset):
         return tf.data.Dataset.from_tensor_slices((class_images, labels))
 
     def map(self, func, args=(), kwargs={}):
-        self.dataset = self.dataset.map(lambda images, labels: (func(images, *args, **kwargs), labels))
+        self.dataset = self.dataset.map(lambda images, labels: (func(images, *args, **kwargs), labels),
+                                        num_parallel_calls=N_PARALLEL)
+
 
 class RandomLabeledImageDataset(LabeledImageDataset):
     """
@@ -155,7 +154,7 @@ class RandomLabeledImageDataset(LabeledImageDataset):
     """
 
     def __init__(self, image_class_dirs: list, labels: list, classes_per_batch, images_per_class,
-                 resize_shape=(224, 224), seed=None):
+                 resize_shape=(256, 256), seed=None):
         """
             :param image_class_dirs: list of class directories containing image files
             :param labels: list of labels for each class
@@ -164,7 +163,7 @@ class RandomLabeledImageDataset(LabeledImageDataset):
             :param resize_shape: tuple of height and width to resize images to
             :param seed: seed for the random sampling
         """
-        super().__init__(image_class_dirs, labels, classes_per_batch, images_per_class, resize_shape,
+        super().__init__(image_class_dirs, labels, classes_per_batch, images_per_class,
                          sample_random=True, shuffle=True, buffer_size=None, seed=seed)
 
         if classes_per_batch < 1:
@@ -172,7 +171,8 @@ class RandomLabeledImageDataset(LabeledImageDataset):
         if images_per_class < 1:
             raise ValueError("Images per class must be positive.")
 
-        self.dataset = self.dataset.batch(self.cycle_length * self.block_length, drop_remainder=True)
+        self.map(resize, args=resize_shape)
+        self.batch(self.cycle_length * self.block_length, drop_remainder=True)
 
 
 class EpisodeImageDataset(LabeledImageDataset):

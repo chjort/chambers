@@ -152,7 +152,7 @@ class NTXentLoss(PairBasedLoss):
     def compute_loss(self, positive_pairs: tf.RaggedTensor, negative_pairs: tf.RaggedTensor):
 
         # loss = tf.nn.softmax_cross_entropy_with_logits()
-        pass
+        raise NotImplementedError()
 
 # class NewLoss(PairBasedLoss):
 #     def __init__(self, miner=None, name=None):

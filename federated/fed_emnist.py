@@ -1,36 +1,47 @@
 import tensorflow as tf
 import tensorflow_federated as tff
 
-# %%
+N_CLIENTS = 10
+EPOCHS_PER_ROUND = 5
+N_ROUNDS = 20
+BATCH_SIZE = 20
+SHUFFLE_BUFFER = 100
+PREFETCH = 10
+
+
 def preprocess(dataset):
-    batch_size = 20
-    shuffle_buffer = 100
-    td = dataset.repeat().shuffle(shuffle_buffer).batch(batch_size)
-    td = td.map(lambda x: (tf.reshape(x["pixels"], (batch_size, -1)), x["label"]))
-    return td.prefetch(10)
+    td = dataset.repeat(EPOCHS_PER_ROUND).shuffle(SHUFFLE_BUFFER).batch(BATCH_SIZE)
+
+    def _format(x):
+        x = (tf.reshape(x["pixels"], (-1, 784)),
+             tf.one_hot(x["label"], depth=10, dtype=tf.int32))
+        return x
+
+    td = td.map(_format)
+    return td.prefetch(PREFETCH)
 
 
 def make_federated_data(client_data, client_ids):
     fed_data = []
     for id_ in client_ids:
         client_dataset = client_data.create_tf_dataset_for_client(id_)
-        client_dataset = preprocess(client_dataset)
+        # client_dataset = preprocess(client_dataset)
         fed_data.append(client_dataset)
     return fed_data
 
 
 train_data, test_data = tff.simulation.datasets.emnist.load_data()
+client_ids = train_data.client_ids[:N_CLIENTS]
 
-client_ids = train_data.client_ids[:10]
-fed_data = make_federated_data(train_data, client_ids)
+train_data = train_data.preprocess(preprocess)
+fed_train_set = make_federated_data(train_data, client_ids)
 
-sample_batch = next(iter(fed_data[0]))
-# sample_batch = (tf.zeros(shape=(20, 784), dtype=tf.float32),
-#                 tf.zeros(shape=(20,), dtype=tf.float32))
+test_data = test_data.preprocess(preprocess)
+test_set = test_data.create_tf_dataset_from_all_clients()
 
 # %%
 def MLP():
-    inputs = tf.keras.layers.Input(shape=(784))
+    inputs = tf.keras.layers.Input(shape=(784,))
     x = tf.keras.layers.Dense(1024)(inputs)
     x = tf.keras.layers.Dense(10)(x)
     x = tf.keras.layers.Softmax()(x)
@@ -44,10 +55,14 @@ def build_model():
     :return: Federated model
     """
     model = MLP()
+
+    # TODO: Remove the sample batch in tensorflow_federated==0.13.0
+    sample_batch = (tf.zeros(shape=(BATCH_SIZE, 784), dtype=tf.float32),
+                    tf.zeros(shape=(BATCH_SIZE, 10), dtype=tf.int32))
     tff_model = tff.learning.from_keras_model(keras_model=model,
                                               dummy_batch=sample_batch,
-                                              loss=tf.keras.losses.SparseCategoricalCrossentropy(),
-                                              metrics=[tf.keras.metrics.SparseCategoricalAccuracy()]
+                                              loss=tf.keras.losses.CategoricalCrossentropy(),
+                                              metrics=[tf.keras.metrics.CategoricalAccuracy()]
                                               )
     return tff_model
 
@@ -72,7 +87,30 @@ def build_server_opt():
     return server_opt
 
 
+# %%
 training_process = tff.learning.build_federated_averaging_process(model_fn=build_model,
                                                                   client_optimizer_fn=build_client_opt,
                                                                   server_optimizer_fn=build_server_opt
                                                                   )
+print(training_process.initialize.type_signature.formatted_representation())
+
+state = training_process.initialize()
+# state[0][0] # model trainable weights
+# state[0][1] # model non_trainable weights
+# state[2] # optimizer state (parameters for client optimizers)
+# state[3] # delta_aggregate_state
+# state[4] # model_broadcast_state
+
+for i in range(N_ROUNDS):
+    state, metrics = training_process.next(state, fed_train_set)
+    print(metrics)
+
+#%%
+model = MLP()
+model.compile(optimizer="sgd",
+              loss=tf.keras.losses.CategoricalCrossentropy(),
+              metrics=["acc"])
+
+model.set_weights(state[0][0])
+
+model.evaluate(test_set, steps=500)

@@ -72,7 +72,7 @@ def build_client_opt():
     Build the optimizer used to _compute_ the gradients for the model weights from the local client data.
     :return: Client optimizer
     """
-    client_opt = tf.keras.optimizers.SGD(learning_rate=0.02)
+    client_opt = tf.keras.optimizers.Adam(learning_rate=0.001)
     return client_opt
 
 
@@ -103,7 +103,7 @@ state = training_process.initialize()
 
 for i in range(N_ROUNDS):
     state, metrics = training_process.next(state, fed_train_set)
-    print(metrics)
+    print(i, metrics)
 
 #%%
 model = MLP()

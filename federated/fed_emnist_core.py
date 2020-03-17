@@ -3,8 +3,6 @@ import collections
 import tensorflow as tf
 import tensorflow_federated as tff
 
-tff.federated_mean()
-
 N_CLIENTS = 10
 EPOCHS_PER_ROUND = 5
 N_ROUNDS = 20

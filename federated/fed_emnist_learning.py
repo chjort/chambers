@@ -39,6 +39,7 @@ fed_train_set = make_federated_data(train_data, client_ids)
 test_data = test_data.preprocess(preprocess)
 test_set = test_data.create_tf_dataset_from_all_clients()
 
+
 # %%
 def MLP():
     inputs = tf.keras.layers.Input(shape=(784,))
@@ -55,12 +56,9 @@ def build_model():
     :return: Federated model
     """
     model = MLP()
-
-    # TODO: Remove the sample batch in tensorflow_federated==0.13.0
-    sample_batch = (tf.zeros(shape=(BATCH_SIZE, 784), dtype=tf.float32),
-                    tf.zeros(shape=(BATCH_SIZE, 10), dtype=tf.int32))
     tff_model = tff.learning.from_keras_model(keras_model=model,
-                                              dummy_batch=sample_batch,
+                                              input_spec=(tf.TensorSpec(shape=[None, 784], dtype=tf.float32),
+                                                          tf.TensorSpec(shape=[None, 10], dtype=tf.int32)),
                                               loss=tf.keras.losses.CategoricalCrossentropy(),
                                               metrics=[tf.keras.metrics.CategoricalAccuracy()]
                                               )
@@ -105,7 +103,7 @@ for i in range(N_ROUNDS):
     state, metrics = training_process.next(state, fed_train_set)
     print(i, metrics)
 
-#%%
+# %%
 model = MLP()
 model.compile(optimizer="sgd",
               loss=tf.keras.losses.CategoricalCrossentropy(),

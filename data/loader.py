@@ -76,7 +76,7 @@ class InterleaveDataset(ABC):
     def cache(self, filename=""):
         self.dataset = self.dataset.cache(filename)
 
-    def map(self, func, args=(), kwargs={}):
+    def map(self, func, *args, **kwargs):
         self.dataset = self.dataset.map(lambda x: func(x, *args, **kwargs),
                                         num_parallel_calls=N_PARALLEL)
 
@@ -140,7 +140,7 @@ class LabeledImageDataset(InterleaveDataset):
         labels = tf.tile([label], [n_files])
         return tf.data.Dataset.from_tensor_slices((class_images, labels))
 
-    def map(self, func, args=(), kwargs={}):
+    def map(self, func, *args, **kwargs):
         self.dataset = self.dataset.map(lambda images, labels: (func(images, *args, **kwargs), labels),
                                         num_parallel_calls=N_PARALLEL)
 
@@ -171,7 +171,9 @@ class RandomLabeledImageDataset(LabeledImageDataset):
         if images_per_class < 1:
             raise ValueError("Images per class must be positive.")
 
-        self.map(resize, args=resize_shape)
+        self.map(resize, *resize_shape)
+
+        # TODO: Dont batch here. Batch _after_ augmentations.
         self.batch(self.cycle_length * self.block_length, drop_remainder=True)
 
 

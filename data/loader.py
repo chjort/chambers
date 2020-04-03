@@ -5,11 +5,12 @@ import tensorflow as tf
 
 from ..augmentations import resize
 from .loader_functions import match_img_files, read_and_decode
+from .base_datasets import TensorDataset, TensorSliceDataset, GeneratorDataset
 
 N_PARALLEL = tf.data.experimental.AUTOTUNE
 
 
-class InterleaveDataset(ABC):
+class InterleaveDataset(TensorSliceDataset, ABC):
     """
         Constructs a tensorflow.data.Dataset which samples inputs by interleaving according to 'self.interleave_map'.
         For more detailed documentation see: https://www.tensorflow.org/api_docs/python/tf/data/Dataset#interleave
@@ -45,43 +46,24 @@ class InterleaveDataset(ABC):
                     cycle_length, input_len)
             )
 
-        self.dataset = tf.data.Dataset.from_tensor_slices(inputs)
+        super().__init__(inputs)
         self.cycle_length = cycle_length
         self.block_length = block_length
-        self.shuffle = shuffle
+        self.do_shuffle = shuffle
         self.buffer_size = buffer_size
         self.seed = seed
 
         if self.buffer_size is None:
             self.buffer_size = input_len
 
-        if self.shuffle:
-            self.dataset = self.dataset.shuffle(buffer_size=self.buffer_size, seed=self.seed)
+        if self.do_shuffle:
+            self.shuffle(buffer_size=self.buffer_size, seed=self.seed)
 
-        self.dataset = self.dataset.interleave(self.interleave_map, cycle_length=self.cycle_length,
-                                               block_length=self.block_length)
-
-    def batch(self, batch_size, drop_remainder=False):
-        self.dataset = self.dataset.batch(batch_size, drop_remainder=drop_remainder)
-
-    def unbatch(self):
-        self.dataset = self.dataset.unbatch()
-
-    def repeat(self, count=None):
-        self.dataset = self.dataset.repeat(count)
-
-    def prefetch(self, buffer_size):
-        self.dataset = self.dataset.prefetch(buffer_size)
-
-    def cache(self, filename=""):
-        self.dataset = self.dataset.cache(filename)
-
-    def map(self, func, *args, **kwargs):
-        self.dataset = self.dataset.map(lambda x: func(x, *args, **kwargs),
-                                        num_parallel_calls=N_PARALLEL)
+        self.interleave(self.interleave_fn, cycle_length=self.cycle_length,
+                        block_length=self.block_length)
 
     @abstractmethod
-    def interleave_map(self, *args, **kwargs):
+    def interleave_fn(self, *args, **kwargs):
         pass
 
 
@@ -110,7 +92,7 @@ class LabeledImageDataset(InterleaveDataset):
         self.map(read_and_decode)
 
     @tf.function
-    def interleave_map(self, input_dir, label):
+    def interleave_fn(self, input_dir, label):
         """
         TODO: Docstring
 

@@ -173,7 +173,7 @@ class SequentialImageDataset(_TransformSliceDataset):
     def flat_map_fn(self, input_dir, label):
         files = match_img_files(input_dir)
         n_files = tf.shape(files)[0]
-        y = tf.repeat(label, n_files)
+        y = tf.tile([label], [n_files])
         return tf.data.Dataset.from_tensor_slices((files, y))
 
     def map(self, func, *args, **kwargs):

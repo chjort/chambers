@@ -3,8 +3,7 @@ import os
 import tensorflow as tf
 
 
-def export(path, model, preprocessing_fn, input_signature, export_name=None, version=1):
-
+def export(path, model, preprocessing_fn, input_signature, version=None):
     @tf.function(input_signature=input_signature)
     def serving(input_images):
         with tf.device("cpu:0"):
@@ -13,11 +12,10 @@ def export(path, model, preprocessing_fn, input_signature, export_name=None, ver
         embeddings = model(img)
         return embeddings
 
-    if export_name is None:
-        export_name = model.name
+    if version is not None:
+        path = os.path.join(path, str(version))
 
-    save_path = os.path.join(path, export_name, str(version))
-    tf.saved_model.save(model, save_path, signatures=serving)
+    tf.saved_model.save(model, path, signatures=serving)
 
 
 class Server:

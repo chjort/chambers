@@ -22,10 +22,10 @@ class Dataset:
     def concatenate(self, dataset):
         self.dataset = self.dataset.concatenate(dataset)
 
-    def map(self, func, *args, **kwargs):
+    def map(self, func):
         self.dataset = self.dataset.map(func, num_parallel_calls=N_PARALLEL)
 
-    def flat_map(self, func, *args, **kwargs):
+    def flat_map(self, func):
         self.dataset = self.dataset.flat_map(func)
 
     def filter(self, predicate):

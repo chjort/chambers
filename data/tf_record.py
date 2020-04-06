@@ -33,6 +33,7 @@ def serialize_tensor_example(x, y):
 
 
 def batch_deserialize_tensor_example(x, dtype=tf.float32):
+    batch_size = x.shape[0]
     tensor_example = tf.io.parse_example(x, _SERIALIZE_TENSOR_DESCRIPTION)
 
     @tf.function
@@ -40,8 +41,10 @@ def batch_deserialize_tensor_example(x, dtype=tf.float32):
         return tf.io.parse_tensor(x, out_type=dtype)
 
     x = tf.map_fn(_parse_tensor_dtype, tensor_example["x"], dtype=dtype,
-                  parallel_iterations=10, infer_shape=False)
+                  parallel_iterations=8, infer_shape=False)
+    x.set_shape([batch_size, None, None, 3])
     y = tensor_example["y"]
+
     return x, y
 
 

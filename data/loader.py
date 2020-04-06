@@ -5,9 +5,8 @@ import tensorflow as tf
 
 from .base_datasets import TensorSliceDataset
 from .loader_functions import match_img_files, read_and_decode
+from .mixins import ImageLabelMixin
 from ..augmentations import resize
-
-N_PARALLEL = tf.data.experimental.AUTOTUNE
 
 
 class _TransformSliceDataset(TensorSliceDataset):
@@ -92,28 +91,28 @@ class InterleaveDataset(_TransformSliceDataset, ABC):
         pass
 
 
-class InterleaveImageDataset(InterleaveDataset):
+class InterleaveImageDataset(InterleaveDataset, ImageLabelMixin):
     """
         Constructs a tensorflow.data.Dataset which loads images by interleaving through input folders.
 
         The attribute 'self.dataset' is the tensorflow.data.Dataset producing outputs of (images, labels)
     """
 
-    def __init__(self, image_class_dirs: list, labels: list, class_cycle_length, images_per_class_cycle,
+    def __init__(self, image_class_dirs: list, labels: list, class_cycle_length, images_per_class,
                  sample_random=False, repeats=None, shuffle=False, buffer_size=None, seed=None):
         """
         :param image_class_dirs: list of class directories containing image files
         :param labels: list of labels for each class
         :param class_cycle_length: number of classes per cycle
-        :param images_per_class_cycle: number of images per class in a cycle
+        :param images_per_class: number of images per class in a cycle
         :param sample_random: Boolean. If true, will uniformly sample the images per class at random
         """
         self.sample_random = sample_random
         super().__init__((image_class_dirs, labels), cycle_length=class_cycle_length,
-                         block_length=images_per_class_cycle, repeats=repeats, shuffle=shuffle, buffer_size=buffer_size,
+                         block_length=images_per_class, repeats=repeats, shuffle=shuffle, buffer_size=buffer_size,
                          seed=seed)
 
-        self.map(read_and_decode)
+        self.map_image(read_and_decode)
 
     @tf.function
     def interleave_fn(self, input_dir, label):
@@ -146,12 +145,36 @@ class InterleaveImageDataset(InterleaveDataset):
         labels = tf.tile([label], [n_files])
         return tf.data.Dataset.from_tensor_slices((class_images, labels))
 
-    def map(self, func, *args, **kwargs):
-        fn = lambda images, labels: (func(images, *args, **kwargs), labels)
-        super().map(fn)
+
+class InterleaveTFRecordDataset(InterleaveDataset, ImageLabelMixin):
+    """
+        Constructs a tensorflow.data.Dataset which loads examples from TF Record files by interleaving through
+        the input record files.
+    """
+
+    def __init__(self, records: list, record_cycle_length, samples_per_record,
+                 sample_random=False, repeats=None, shuffle=False, buffer_size=None, seed=None):
+        """
+        :param records: list of TF Record files
+        :param record_cycle_length: number of records per cycle
+        :param samples_per_record: number of examples per record in a cycle
+        :param sample_random: Boolean. If true, will uniformly sample the examples per record at random
+        """
+        self.sample_random = sample_random
+        super().__init__(records, cycle_length=record_cycle_length, block_length=samples_per_record,
+                         repeats=repeats, shuffle=shuffle, buffer_size=buffer_size, seed=seed)
+
+    @tf.function
+    def interleave_fn(self, record):
+        td_rec = tf.data.TFRecordDataset(record)
+        if self.sample_random:
+            td_rec = td_rec.shuffle(buffer_size=100)
+        td_rec = td_rec.repeat()
+        td_rec = td_rec.take(self.block_length)
+        return td_rec
 
 
-class SequentialImageDataset(_TransformSliceDataset):
+class SequentialImageDataset(_TransformSliceDataset, ImageLabelMixin):
     """
         Constructs a tensorflow.data.Dataset which sequentially loads images from input folders.
     """
@@ -168,24 +191,36 @@ class SequentialImageDataset(_TransformSliceDataset):
                          seed=seed)
 
         self.flat_map(self.flat_map_fn)
-        self.map(read_and_decode)
+        self.map_image(read_and_decode)
 
-    def flat_map_fn(self, input_dir, label):
+    @staticmethod
+    def flat_map_fn(input_dir, label):
         files = match_img_files(input_dir)
         n_files = tf.shape(files)[0]
         y = tf.tile([label], [n_files])
         return tf.data.Dataset.from_tensor_slices((files, y))
 
-    def map(self, func, *args, **kwargs):
-        fn = lambda images, labels: (func(images, *args, **kwargs), labels)
-        super().map(fn)
 
-    def flat_map(self, func, *args, **kwargs):
-        fn = lambda images, labels: func(images, labels, *args, **kwargs)
-        super().flat_map(fn)
+class SequentialTFRecordDataset(_TransformSliceDataset, ImageLabelMixin):
+    """
+        Constructs a tensorflow.data.Dataset which sequentially loads examples from TF Record files.
+    """
+
+    def __init__(self, records: list, repeats=None, shuffle=False, buffer_size=None, seed=None):
+        """
+        :param image_class_dirs: list of class directories containing image files
+        :param labels: list of labels for each class
+        :param class_cycle_length: number of classes per cycle
+        :param images_per_class_cycle: number of images per class in a cycle
+        :param sample_random: Boolean. If true, will uniformly sample the images per class at random
+        """
+        super().__init__(records, repeats=repeats, shuffle=shuffle, buffer_size=buffer_size,
+                         seed=seed)
+
+        self.dataset = tf.data.TFRecordDataset(records)
 
 
-class EpisodeImageDataset(InterleaveImageDataset):
+class EpisodeImageDataset(InterleaveImageDataset, ImageLabelMixin):
     """
         Constructs a tensorflow.data.Dataset which generates batches of 'n-shot, k-way episodes'. Each batch consists of a
         dictionary containing a support set and a query set, and a one-hot encoded tensor as the labels
@@ -201,15 +236,15 @@ class EpisodeImageDataset(InterleaveImageDataset):
         :param resize_shape: Tuple of (height, width) to resize image to
         """
 
-        super().__init__(image_class_dirs, labels, class_cycle_length=k, images_per_class_cycle=n + q,
+        super().__init__(image_class_dirs, labels, class_cycle_length=k, images_per_class=n + q,
                          sample_random=True, shuffle=True)
         self.n = n
         self.k = k
         self.q = q
-        self.dataset = self.dataset.map(lambda x, y: resize(x, *resize_shape))
+        self.map(lambda x, y: resize(x, *resize_shape))
         self.batch(self.n + self.q, drop_remainder=True)
         self.batch(self.k, drop_remainder=True)
-        self.dataset = self.dataset.map(self._get_support_query_y)
+        self.map(self._get_support_query_y)
 
     @tf.function
     def _get_support_query_y(self, images):

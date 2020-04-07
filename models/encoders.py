@@ -1,8 +1,10 @@
 from tensorflow.keras.layers import Flatten, ReLU, Input, GlobalAveragePooling2D, GlobalMaxPooling2D, Dense
+# from tensorflow.keras.activations
 from tensorflow.keras.models import Model
 
 from .backbones import ResNet50_ImageNet, BN_Inception_ImageNet
 from ..layers import ConvBlock, GlobalGeneralizedMean, L2Normalization
+from ..utils.generic import deserialize_object
 
 
 def BN_Inception_SPoC(input_shape=None, freeze_layers=False):
@@ -78,3 +80,22 @@ def CNN(input_shape=None):
     model = Model(inputs=input_, outputs=x, name="cnn")
 
     return model
+
+
+def get(identifier, **kwargs):
+    if type(identifier) is str:
+        module_objs = globals()
+        return deserialize_object(identifier,
+                                  module_objects=module_objs,
+                                  module_name=module_objs.get("__name__"),
+                                  **kwargs
+                                  )
+    elif issubclass(identifier.__class__, Model):
+        return identifier
+    elif issubclass(identifier.__class__, type):
+        return identifier(**kwargs)
+    elif callable(identifier):
+        return identifier(**kwargs)
+    else:
+        raise TypeError(
+            'Could not interpret encoder model identifier: {}'.format(identifier))

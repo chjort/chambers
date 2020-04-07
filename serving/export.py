@@ -4,6 +4,7 @@ import tensorflow as tf
 
 
 def export(path, model, preprocessing_fn, input_signature, version=None):
+
     @tf.function(input_signature=input_signature)
     def serving(input_images):
         with tf.device("cpu:0"):

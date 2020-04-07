@@ -31,8 +31,8 @@ class Dataset:
     def filter(self, predicate):
         self.dataset = self.dataset.filter(predicate)
 
-    def interleave(self, map_func, cycle_length=-1, block_length=1, num_parallel_calls=None):
-        self.dataset = self.dataset.interleave(map_func, cycle_length, block_length, num_parallel_calls)
+    def interleave(self, map_func, cycle_length=-1, block_length=1):
+        self.dataset = self.dataset.interleave(map_func, cycle_length, block_length, num_parallel_calls=N_PARALLEL)
 
     def padded_batch(self, batch_size, padded_shapes, padding_values=None, drop_remainder=False):
         self.dataset = self.dataset.padded_batch(batch_size, padded_shapes, padding_values, drop_remainder)

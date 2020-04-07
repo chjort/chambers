@@ -7,6 +7,7 @@ from .base_datasets import TensorSliceDataset
 from .loader_functions import match_img_files, read_and_decode
 from .mixins import ImageLabelMixin
 from ..augmentations import resize
+from .base_datasets import N_PARALLEL
 
 
 class _TransformSliceDataset(TensorSliceDataset):
@@ -153,7 +154,8 @@ class InterleaveTFRecordDataset(InterleaveDataset, ImageLabelMixin):
     """
 
     def __init__(self, records: list, record_cycle_length, samples_per_record,
-                 sample_random=False, repeats=None, shuffle=False, buffer_size=None, seed=None):
+                 sample_random=False, repeats=None, shuffle=False, buffer_size=None, seed=None
+                 ):
         """
         :param records: list of TF Record files
         :param record_cycle_length: number of records per cycle
@@ -169,8 +171,8 @@ class InterleaveTFRecordDataset(InterleaveDataset, ImageLabelMixin):
         td_rec = tf.data.TFRecordDataset(record)
         if self.sample_random:
             td_rec = td_rec.shuffle(buffer_size=100)
-        td_rec = td_rec.repeat()
-        td_rec = td_rec.take(self.block_length)
+            td_rec = td_rec.repeat()
+            td_rec = td_rec.take(self.block_length)
         return td_rec
 
 

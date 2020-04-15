@@ -243,7 +243,7 @@ class EpisodeImageDataset(InterleaveImageDataset, ImageLabelMixin):
         self.n = n
         self.k = k
         self.q = q
-        self.map(lambda x, y: resize(x, *resize_shape))
+        self.map_image(resize, *resize_shape)
         self.batch(self.n + self.q, drop_remainder=True)
         self.batch(self.k, drop_remainder=True)
         self.map(self._get_support_query_y)

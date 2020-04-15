@@ -20,7 +20,6 @@ def match_img_files(dir_path):
     return D
 
 
-@tf.function
 def read_and_decode(file):
     """
     Read the bytes of an image file as RGB and decode the bytes into a tensor.

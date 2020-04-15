@@ -15,7 +15,6 @@ def random_flip_left_right(x, seed=None):
     return tf.image.random_flip_left_right(x, seed=seed)
 
 
-@tf.function
 def random_crop(x, height, width, seed=None):
     x_rank = x.shape.ndims
 
@@ -32,7 +31,6 @@ def random_crop(x, height, width, seed=None):
     return cropped_x
 
 
-@tf.function
 def center_crop(x, height, width):
     x_rank = x.shape.ndims
 
@@ -56,7 +54,6 @@ def center_crop(x, height, width):
     return cropped_x
 
 
-@tf.function
 def resize(x, height, width):
     """
     Resizes images to a specified height and width.
@@ -81,7 +78,6 @@ def resize(x, height, width):
     return x
 
 
-@tf.function
 def resnet_imagenet_normalize(x):
     # RGB -> BGR
     x = x[..., ::-1]
@@ -89,7 +85,6 @@ def resnet_imagenet_normalize(x):
     return normalize_image(x, mean=[103.939, 116.779, 123.68])
 
 
-@tf.function
 def normalize_image(x, mean, std=None):
     """ Normalizes an image with mean and standard deviation """
     mean = tf.constant(mean, dtype=tf.float32)

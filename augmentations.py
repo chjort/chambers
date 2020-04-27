@@ -81,8 +81,22 @@ def resize(x, height, width):
 def resnet_imagenet_normalize(x):
     # RGB -> BGR
     x = x[..., ::-1]
+    x = normalize_image(x, mean=[103.939, 116.779, 123.68])
 
-    return normalize_image(x, mean=[103.939, 116.779, 123.68])
+    return x
+
+
+def torch_normalize(x):
+    x = x / 255.
+    x = normalize_image(x, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+
+    return x
+
+
+def tf_normalize(x):
+    x = x / 127.5
+    x = x - 1.
+    return x
 
 
 def normalize_image(x, mean, std=None):

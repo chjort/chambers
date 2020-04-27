@@ -53,7 +53,7 @@ def ResNet50_GeM(input_shape=None, freeze_layers=False):
     resnet = ResNet50_ImageNet(input_shape, freeze_layers)
 
     # x = ReLU()(resnet.output)
-    x = GlobalGeneralizedMean(p=3, trainable=False)(resnet.output)
+    x = GlobalGeneralizedMean(p=3, shared=True, trainable=False)(resnet.output)
     x = Dense(512)(x)
     x = L2Normalization(axis=1)(x)
 

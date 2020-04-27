@@ -15,16 +15,20 @@ class GlobalGeneralizedMean(GlobalPooling2D):
 
     """
 
-    def __init__(self, p=3, trainable=True, data_format=None, **kwargs):
+    def __init__(self, p=3, shared=True, trainable=True, data_format=None, **kwargs):
         super(GlobalGeneralizedMean, self).__init__(data_format=data_format, **kwargs)
         self._p_init = p
+        self.shared = shared
         self.trainable = trainable
 
     def build(self, input_shape):
-        if self.data_format == 'channels_last':
-            p_shape = input_shape[-1]
+        if self.shared:
+            p_shape = 1
         else:
-            p_shape = input_shape[1]
+            if self.data_format == 'channels_last':
+                p_shape = input_shape[-1]
+            else:
+                p_shape = input_shape[1]
 
         self.p = self.add_weight(shape=[p_shape],
                                  initializer=initializers.constant(self._p_init),

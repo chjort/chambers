@@ -21,7 +21,12 @@ class GlobalGeneralizedMean(GlobalPooling2D):
         self.trainable = trainable
 
     def build(self, input_shape):
-        self.p = self.add_weight(shape=[1],
+        if self.data_format == 'channels_last':
+            p_shape = input_shape[-1]
+        else:
+            p_shape = input_shape[1]
+
+        self.p = self.add_weight(shape=[p_shape],
                                  initializer=initializers.constant(self.p),
                                  trainable=self.trainable
                                  )

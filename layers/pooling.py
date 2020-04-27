@@ -46,6 +46,6 @@ class GlobalGeneralizedMean(GlobalPooling2D):
         return x
 
     def get_config(self):
-        config = {'p': self.p, 'trainable': self.trainable}
+        config = {'p': self._p_init, "shared": self.shared, 'trainable': self.trainable}
         base_config = super(GlobalGeneralizedMean, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))

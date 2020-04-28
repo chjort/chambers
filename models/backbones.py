@@ -1,4 +1,5 @@
 import tensorflow as tf
+import keras_applications
 
 
 def BN_Inception_ImageNet(input_shape=None, freeze_layers=False):

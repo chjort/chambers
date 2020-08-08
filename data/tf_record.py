@@ -48,6 +48,10 @@ def batch_deserialize_tensor_example(x, dtype=tf.float32):
     return x, y
 
 
+def batch_deserialize_tensor_example_uint8(x):
+    return batch_deserialize_tensor_example(x, tf.uint8)
+
+
 def batch_deserialize_tensor_example_int32(x):
     return batch_deserialize_tensor_example(x, tf.int32)
 
@@ -70,6 +74,10 @@ def deserialize_tensor_example(x, dtype=tf.float32):
     x = tf.io.parse_tensor(tensor_example["x"], out_type=dtype)
     y = tensor_example["y"]
     return x, y
+
+
+def deserialize_tensor_example_uint8(x):
+    return deserialize_tensor_example(x, tf.uint8)
 
 
 def deserialize_tensor_example_int32(x):

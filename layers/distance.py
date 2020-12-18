@@ -1,6 +1,6 @@
 import tensorflow as tf
 
-
+# TODO Make a base distance layer.
 class L1Distance(tf.keras.layers.Layer):
     """
     L1 distance or "Manhattan-distance" layer
@@ -67,9 +67,9 @@ class CosineDistance(tf.keras.layers.Layer):
         return dict(list(base_config.items()) + list(config.items()))
 
 
-class EuclideanDistance(tf.keras.layers.Layer):
+class L2Distance(tf.keras.layers.Layer):
     """
-    Euclidean distance layer
+    L2 distance layer. Also knows as Euclidean distance.
 
     This layer takes as input a list of two vectors [v1, v2] and computes
     the Euclidean distance between v1 and v2 according to the following equation:
@@ -79,7 +79,7 @@ class EuclideanDistance(tf.keras.layers.Layer):
     """
 
     def __init__(self, sum=True, axis=-1, keepdims=True):
-        super(EuclideanDistance, self).__init__()
+        super(L2Distance, self).__init__()
         self.sum = sum
         self.axis = axis
         self.keepdims = keepdims

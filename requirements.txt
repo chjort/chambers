@@ -1,2 +1,1 @@
-tensorflow-gpu==2.0.0
-numpy
+tensorflow==2.4.0

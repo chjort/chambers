@@ -107,31 +107,3 @@ class RMAC(tf.keras.layers.Layer):
             return K.max(roi, axis=(1, 2))
         else:
             raise ValueError("Invalid image format.")
-
-# class RMAC_SLOW(RoiPooling):
-#     def __init__(self, scales=3, **kwargs):
-#         self.scales = scales
-#         super().__init__(**kwargs)
-#
-#     def build(self, input_shape):
-#         if self.dim_ordering == 'channels_first':
-#             w = input_shape[2]
-#             h = input_shape[3]
-#         elif self.dim_ordering == 'channels_last':
-#             w = input_shape[1]
-#             h = input_shape[2]
-#         else:
-#             raise ValueError("Invalid image format.")
-#
-#         self.roi_boxes = rmac_regions(w, h, self.scales)
-#
-#     def get_config(self):
-#         config = {'scales': self.scales}
-#         base_config = super().get_config()
-#         return dict(list(base_config.items()) + list(config.items()))
-#
-#     def call(self, x, mask=None):
-#         def batch_pool_rois(x):
-#             return self.pool_image_rois(x, self.roi_boxes)
-#
-#         return K.map_fn(batch_pool_rois, x, dtype=tf.float32)

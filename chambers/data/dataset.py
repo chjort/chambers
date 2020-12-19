@@ -172,7 +172,10 @@ def InterleaveImageDataset(
     return td
 
 
-def InterleaveTFRecordDataset(records: list,labels: list,record_cycle_length: int,
+def InterleaveTFRecordDataset(
+    records: list,
+    labels: list,
+    record_cycle_length: int,
     examples_per_block: int,
     block_bound=True,
     sample_block_random=False,

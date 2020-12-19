@@ -164,7 +164,6 @@ def InterleaveImageDataset(
         seed=seed,
         repeats=repeats,
     )
-    print(__CONFIG["N_PARALLEL"], flush=True)
     td = td.map(
         lambda x, y: (read_and_decode_image(x, channels=image_channels), y),
         num_parallel_calls=__CONFIG["N_PARALLEL"],

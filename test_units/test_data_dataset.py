@@ -91,7 +91,7 @@ class TestDataset(tf.test.TestCase):
             seed=None,
             repeats=None,
         )
-        td_out = list(iter(td.as_numpy_iterator()))
+        td_out = list(td.as_numpy_iterator())
         assert td_out == self.slices
 
     def test_shuffle_repeat1(self):
@@ -104,7 +104,7 @@ class TestDataset(tf.test.TestCase):
             seed=None,
             repeats=3,
         )
-        td_out = list(iter(td.as_numpy_iterator()))
+        td_out = list(td.as_numpy_iterator())
         assert len(td_out) == 3 * len(self.slices)
 
     def test_shuffle_repeat2(self):
@@ -117,7 +117,7 @@ class TestDataset(tf.test.TestCase):
             seed=None,
             repeats=None,
         )
-        td_out = list(iter(td.as_numpy_iterator()))
+        td_out = list(td.as_numpy_iterator())
         assert td_out != self.slices
 
     def test_shuffle_repeat3(self):
@@ -130,7 +130,7 @@ class TestDataset(tf.test.TestCase):
             seed=None,
             repeats=2,
         )
-        td_out = list(iter(td.as_numpy_iterator()))
+        td_out = list(td.as_numpy_iterator())
         it1 = td_out[: len(self.slices)]
         it2 = td_out[len(self.slices) :]
 
@@ -146,7 +146,7 @@ class TestDataset(tf.test.TestCase):
             seed=None,
             repeats=2,
         )
-        td_out = list(iter(td.as_numpy_iterator()))
+        td_out = list(td.as_numpy_iterator())
         it1 = td_out[: len(self.slices)]
         it2 = td_out[len(self.slices) :]
 

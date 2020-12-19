@@ -15,6 +15,6 @@ class Sum(tf.keras.layers.Layer):
         return x
 
     def get_config(self):
-        config = {'axis': self.axis}
+        config = {"axis": self.axis}
         base_config = super().get_config()
         return dict(list(base_config.items()) + list(config.items()))

@@ -40,8 +40,13 @@ def batch_deserialize_tensor_example(x, dtype=tf.float32):
     def _parse_tensor_dtype(x):
         return tf.io.parse_tensor(x, out_type=dtype)
 
-    x = tf.map_fn(_parse_tensor_dtype, tensor_example["x"], dtype=dtype,
-                  parallel_iterations=8, infer_shape=False)
+    x = tf.map_fn(
+        _parse_tensor_dtype,
+        tensor_example["x"],
+        dtype=dtype,
+        parallel_iterations=8,
+        infer_shape=False,
+    )
     x.set_shape([batch_size, None, None, 3])
     y = tensor_example["y"]
 

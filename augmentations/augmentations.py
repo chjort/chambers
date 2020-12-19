@@ -54,8 +54,13 @@ def center_crop(x, height, width, input_height=None, input_width=None):
 
     offset_h = tf.cast((h - height) / 2, tf.int32)
     offset_w = tf.cast((w - width) / 2, tf.int32)
-    cropped_x = tf.image.crop_to_bounding_box(x, offset_height=offset_h, offset_width=offset_w,
-                                              target_height=height, target_width=width)
+    cropped_x = tf.image.crop_to_bounding_box(
+        x,
+        offset_height=offset_h,
+        offset_width=offset_w,
+        target_height=height,
+        target_width=width,
+    )
 
     return cropped_x
 
@@ -112,7 +117,7 @@ def resnet_imagenet_normalize(x):
 def torch_normalize(x):
     x = tf.cast(x, tf.float32)
 
-    x = x / 255.
+    x = x / 255.0
     x = normalize_image(x, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 
     return x
@@ -122,7 +127,7 @@ def tf_normalize(x):
     x = tf.cast(x, tf.float32)
 
     x = x / 127.5
-    x = x - 1.
+    x = x - 1.0
     return x
 
 
@@ -132,7 +137,7 @@ def normalize_image(x, mean, std=None):
     mean = tf.constant(mean, dtype=tf.float32)
 
     # subtract mean
-    x_normed = (x - mean)
+    x_normed = x - mean
 
     if std is not None:
         # divide by standard deviation

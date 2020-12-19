@@ -11,8 +11,7 @@ class Miner(ABC):
 
     def __call__(self, positive, negative):
         scope_name = self.name
-        graph_ctx = tf_utils.graph_context_for_symbolic_tensors(
-            positive, negative)
+        graph_ctx = tf_utils.graph_context_for_symbolic_tensors(positive, negative)
         with K.name_scope(scope_name or self.__class__.__name__), graph_ctx:
             return self.mine(positive, negative)
 
@@ -28,7 +27,9 @@ class Miner(ABC):
 
     def mine(self, positive, negative):
         mined_pos_mask, mined_neg_mask = self.compute_masks(positive, negative)
-        mined_pos_mat, mined_neg_mat = self.apply_masks(positive, negative, mined_pos_mask, mined_neg_mask)
+        mined_pos_mat, mined_neg_mat = self.apply_masks(
+            positive, negative, mined_pos_mask, mined_neg_mask
+        )
 
         return mined_pos_mat, mined_neg_mat
 

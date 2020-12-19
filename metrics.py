@@ -3,27 +3,31 @@ from typing import List
 import tensorflow as tf
 from tensorflow.python.keras.metrics import MeanMetricWrapper
 
-from .losses import soft_dice_coefficient as _dsc
+from .losses.categorical import soft_dice_coefficient as _dsc
 
 
 class F1(tf.keras.metrics.Metric):
-    def __init__(self, thresholds=None, top_k=None, class_id=None, name=None, dtype=None):
+    def __init__(
+        self, thresholds=None, top_k=None, class_id=None, name=None, dtype=None
+    ):
         super(F1, self).__init__(name=name, dtype=dtype)
         self.thresholds = thresholds
         self.top_k = top_k
         self.class_id = class_id
-        self.precision = tf.keras.metrics.Precision(thresholds=self.thresholds,
-                                                    top_k=self.top_k,
-                                                    class_id=self.class_id,
-                                                    name=name,
-                                                    dtype=dtype
-                                                    )
-        self.recall = tf.keras.metrics.Recall(thresholds=self.thresholds,
-                                              top_k=self.top_k,
-                                              class_id=self.class_id,
-                                              name=name,
-                                              dtype=dtype
-                                              )
+        self.precision = tf.keras.metrics.Precision(
+            thresholds=self.thresholds,
+            top_k=self.top_k,
+            class_id=self.class_id,
+            name=name,
+            dtype=dtype,
+        )
+        self.recall = tf.keras.metrics.Recall(
+            thresholds=self.thresholds,
+            top_k=self.top_k,
+            class_id=self.class_id,
+            name=name,
+            dtype=dtype,
+        )
 
     def update_state(self, y_true, y_pred, sample_weight=None):
         self.precision.update_state(y_true, y_pred, sample_weight=sample_weight)
@@ -41,17 +45,27 @@ class F1(tf.keras.metrics.Metric):
 
     def get_config(self):
         config = {
-            'thresholds': self.thresholds,
-            'top_k': self.top_k,
-            'class_id': self.class_id
+            "thresholds": self.thresholds,
+            "top_k": self.top_k,
+            "class_id": self.class_id,
         }
         base_config = super(F1, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
 
 class SoftDiceCoefficient(MeanMetricWrapper):
-    def __init__(self, exclude_classes: List[int] = None, name="soft_dice_coefficient", dtype=None):
-        super().__init__(soft_dice_coefficient, name=name, dtype=dtype, exclude_classes=exclude_classes)
+    def __init__(
+        self,
+        exclude_classes: List[int] = None,
+        name="soft_dice_coefficient",
+        dtype=None,
+    ):
+        super().__init__(
+            soft_dice_coefficient,
+            name=name,
+            dtype=dtype,
+            exclude_classes=exclude_classes,
+        )
 
     def get_config(self):
         config = {"exclude_classes": self.class_mask}

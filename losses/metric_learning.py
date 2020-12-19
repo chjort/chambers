@@ -28,7 +28,9 @@ class PairBasedLoss(tf.keras.losses.Loss, abc.ABC):
         similarity_matrix = self.compute_similarity_matrix(y_pred)
 
         # split similarity matrix into similarites for positive pairs and similarities for negative pairs
-        positive_pairs, negative_pairs = self.get_signed_pairs(similarity_matrix, y_true, ignore_diag=True)
+        positive_pairs, negative_pairs = self.get_signed_pairs(
+            similarity_matrix, y_true, ignore_diag=True
+        )
 
         if self.miner is not None:
             # Mine for informative pairs
@@ -46,8 +48,9 @@ class PairBasedLoss(tf.keras.losses.Loss, abc.ABC):
         """
         return tf.matmul(y_pred, tf.transpose(y_pred))
 
-    def get_signed_pairs(self, similarity_matrix: tf.Tensor, y_true: tf.Tensor, ignore_diag: bool = True) -> \
-            Tuple[tf.RaggedTensor, tf.RaggedTensor]:
+    def get_signed_pairs(
+        self, similarity_matrix: tf.Tensor, y_true: tf.Tensor, ignore_diag: bool = True
+    ) -> Tuple[tf.RaggedTensor, tf.RaggedTensor]:
         """
 
         :param similarity_matrix: The similarity scores between the embeddings as A 2D Tensor of shape
@@ -68,19 +71,23 @@ class PairBasedLoss(tf.keras.losses.Loss, abc.ABC):
             neg_pair_mask = tf.linalg.set_diag(neg_pair_mask, diag_val)
 
         # get similarities of positive pairs
-        pos_mat = tf.RaggedTensor.from_row_lengths(values=similarity_matrix[pos_pair_mask],
-                                                   row_lengths=tf.reduce_sum(tf.cast(pos_pair_mask, tf.int32), axis=1)
-                                                   )
+        pos_mat = tf.RaggedTensor.from_row_lengths(
+            values=similarity_matrix[pos_pair_mask],
+            row_lengths=tf.reduce_sum(tf.cast(pos_pair_mask, tf.int32), axis=1),
+        )
 
         # get similarities of negative pairs
-        neg_mat = tf.RaggedTensor.from_row_lengths(values=similarity_matrix[neg_pair_mask],
-                                                   row_lengths=tf.reduce_sum(tf.cast(neg_pair_mask, tf.int32), axis=1)
-                                                   )
+        neg_mat = tf.RaggedTensor.from_row_lengths(
+            values=similarity_matrix[neg_pair_mask],
+            row_lengths=tf.reduce_sum(tf.cast(neg_pair_mask, tf.int32), axis=1),
+        )
 
         return pos_mat, neg_mat
 
     @abc.abstractmethod
-    def compute_loss(self, positive_pairs: tf.RaggedTensor, negative_pairs: tf.RaggedTensor):
+    def compute_loss(
+        self, positive_pairs: tf.RaggedTensor, negative_pairs: tf.RaggedTensor
+    ):
         """
         Computes the total loss given the positive pair similarities and negative pair similarities.
         :param positive_pairs: Positive pairs as a 2D RaggedTensor with shape [n, 0... n].
@@ -101,24 +108,51 @@ class MultiSimilarityLoss(PairBasedLoss):
     https://arxiv.org/abs/1904.06627
     """
 
-    def __init__(self, pos_scale=2.0, neg_scale=40.0, threshold=0.5, miner=_MSMiner(margin=0.1),
-                 name="multi_similarity_loss"):
+    def __init__(
+        self,
+        pos_scale=2.0,
+        neg_scale=40.0,
+        threshold=0.5,
+        miner=_MSMiner(margin=0.1),
+        name="multi_similarity_loss",
+    ):
         super().__init__(miner=miner, name=name)
         self.pos_scale = pos_scale  # alpha
         self.neg_scale = neg_scale  # beta
         self.threshold = threshold  # lambda
 
     def compute_loss(self, positive_pairs, negative_pairs):
-        pos_loss = tf.math.log(
-            1 + tf.reduce_sum(tf.exp(-self.pos_scale * (positive_pairs - self.threshold)), axis=1)) / self.pos_scale
-        neg_loss = tf.math.log(
-            1 + tf.reduce_sum(tf.exp(self.neg_scale * (negative_pairs - self.threshold)), axis=1)) / self.neg_scale
+        pos_loss = (
+            tf.math.log(
+                1
+                + tf.reduce_sum(
+                    tf.exp(-self.pos_scale * (positive_pairs - self.threshold)), axis=1
+                )
+            )
+            / self.pos_scale
+        )
+        neg_loss = (
+            tf.math.log(
+                1
+                + tf.reduce_sum(
+                    tf.exp(self.neg_scale * (negative_pairs - self.threshold)), axis=1
+                )
+            )
+            / self.neg_scale
+        )
 
         return pos_loss + neg_loss
 
 
 class ContrastiveLoss(PairBasedLoss):
-    def __init__(self, positive_margin=1., negative_margin=0.3, exponent=2, miner=None, name="contrastive_loss"):
+    def __init__(
+        self,
+        positive_margin=1.0,
+        negative_margin=0.3,
+        exponent=2,
+        miner=None,
+        name="contrastive_loss",
+    ):
         """
 
         :param positive_margin: The margin that the similarity of positive pairs at least should be to not contribute
@@ -132,13 +166,20 @@ class ContrastiveLoss(PairBasedLoss):
         self.negative_margin = negative_margin
         self.exponent = exponent
 
-    def compute_loss(self, positive_pairs: tf.RaggedTensor, negative_pairs: tf.RaggedTensor):
+    def compute_loss(
+        self, positive_pairs: tf.RaggedTensor, negative_pairs: tf.RaggedTensor
+    ):
         # if positive pair similarity is lower than the positive margin, it contributes to the loss
-        pos_pairs_loss = tf.pow(self.positive_margin - positive_pairs, self.exponent) / self.exponent
+        pos_pairs_loss = (
+            tf.pow(self.positive_margin - positive_pairs, self.exponent) / self.exponent
+        )
         pos_loss = tf.reduce_sum(pos_pairs_loss, axis=1)
 
         # if negative pair similarity is larger than the negative margin, it contributes to the loss
-        neg_pairs_loss = tf.pow(tf.maximum(0, negative_pairs - self.negative_margin), self.exponent) / self.exponent
+        neg_pairs_loss = (
+            tf.pow(tf.maximum(0, negative_pairs - self.negative_margin), self.exponent)
+            / self.exponent
+        )
         neg_loss = tf.reduce_sum(neg_pairs_loss, axis=1)
 
         return pos_loss + neg_loss
@@ -149,10 +190,13 @@ class NTXentLoss(PairBasedLoss):
         super().__init__(miner=miner, name=name)
         self.temperature = temperature
 
-    def compute_loss(self, positive_pairs: tf.RaggedTensor, negative_pairs: tf.RaggedTensor):
+    def compute_loss(
+        self, positive_pairs: tf.RaggedTensor, negative_pairs: tf.RaggedTensor
+    ):
 
         # loss = tf.nn.softmax_cross_entropy_with_logits()
         raise NotImplementedError()
+
 
 # class NewLoss(PairBasedLoss):
 #     def __init__(self, miner=None, name=None):

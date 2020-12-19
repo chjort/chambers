@@ -1,7 +1,7 @@
 from typing import List
 
 import tensorflow as tf
-from ..utils.tf import remove_indices
+from ..utils.tensor import remove_indices
 
 
 def soft_dice_coefficient(y_true, y_pred, exclude_classes: List[int] = None):
@@ -20,8 +20,9 @@ def soft_dice_coefficient(y_true, y_pred, exclude_classes: List[int] = None):
     y_pred = tf.cast(y_pred, tf.float32)
 
     intersection = tf.reduce_sum(y_true * y_pred, axis=axis)
-    channel_dsc = (2. * intersection + eps) / (
-            tf.reduce_sum(y_true, axis=axis) + tf.reduce_sum(y_pred, axis=axis) + eps)
+    channel_dsc = (2.0 * intersection + eps) / (
+        tf.reduce_sum(y_true, axis=axis) + tf.reduce_sum(y_pred, axis=axis) + eps
+    )
 
     if exclude_classes is not None:
         channel_dsc = remove_indices(channel_dsc, exclude_classes, axis=1)

@@ -1,4 +1,10 @@
-from tensorflow.keras.layers import Flatten, Input, GlobalAveragePooling2D, GlobalMaxPooling2D, Dense
+from tensorflow.keras.layers import (
+    Flatten,
+    Input,
+    GlobalAveragePooling2D,
+    GlobalMaxPooling2D,
+    Dense,
+)
 from tensorflow.keras.models import Model
 
 from .backbones import ResNet50_ImageNet, BN_Inception_ImageNet
@@ -37,7 +43,7 @@ def ResNet50_RMAC(input_shape=None, freeze_layers=False):
     # TODO: PCA + WHITENING
     x = Sum(axis=1)(x)
     x = L2Normalization(axis=1)(x)
-    x = Dense(512)(x) # TODO REMOVE WHEN USING PCA
+    x = Dense(512)(x)  # TODO REMOVE WHEN USING PCA
     x = L2Normalization(axis=1)(x)
 
     model = Model(inputs=resnet.input, outputs=x, name="ResNet50_RMAC")
@@ -98,11 +104,12 @@ def CNN64(input_shape=None):
 def get(identifier, **kwargs):
     if type(identifier) is str:
         module_objs = globals()
-        return deserialize_object(identifier,
-                                  module_objects=module_objs,
-                                  module_name=module_objs.get("__name__"),
-                                  **kwargs
-                                  )
+        return deserialize_object(
+            identifier,
+            module_objects=module_objs,
+            module_name=module_objs.get("__name__"),
+            **kwargs
+        )
     elif issubclass(identifier.__class__, Model):
         return identifier
     elif issubclass(identifier.__class__, type):
@@ -111,4 +118,5 @@ def get(identifier, **kwargs):
         return identifier(**kwargs)
     else:
         raise TypeError(
-            'Could not interpret encoder model identifier: {}'.format(identifier))
+            "Could not interpret encoder model identifier: {}".format(identifier)
+        )

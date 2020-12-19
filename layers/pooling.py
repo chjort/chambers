@@ -27,19 +27,20 @@ class GlobalGeneralizedMean(GlobalPooling2D):
         if self.shared:
             p_shape = 1
         else:
-            if self.data_format == 'channels_last':
+            if self.data_format == "channels_last":
                 p_shape = input_shape[-1]
             else:
                 p_shape = input_shape[1]
 
-        self.p = self.add_weight(shape=[p_shape],
-                                 initializer=initializers.constant(self._p_init),
-                                 trainable=self.trainable
-                                 )
+        self.p = self.add_weight(
+            shape=[p_shape],
+            initializer=initializers.constant(self._p_init),
+            trainable=self.trainable,
+        )
 
     def call(self, inputs, **kwargs):
         x = tf.pow(inputs, self.p)
-        if self.data_format == 'channels_last':
+        if self.data_format == "channels_last":
             x = tf.reduce_mean(x, axis=[1, 2])
         else:
             x = tf.reduce_mean(x, axis=[2, 3])
@@ -48,7 +49,7 @@ class GlobalGeneralizedMean(GlobalPooling2D):
         return x
 
     def get_config(self):
-        config = {'p': self._p_init, "shared": self.shared, 'trainable': self.trainable}
+        config = {"p": self._p_init, "shared": self.shared, "trainable": self.trainable}
         base_config = super(GlobalGeneralizedMean, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
@@ -71,8 +72,10 @@ class RoiPooling(Layer):
     def __init__(self, **kwargs):
 
         self.dim_ordering = K.image_data_format()
-        assert self.dim_ordering in {'channels_last',
-                                     'channels_first'}, 'dim_ordering must be in {channels_last, channels_first}'
+        assert self.dim_ordering in {
+            "channels_last",
+            "channels_first",
+        }, "dim_ordering must be in {channels_last, channels_first}"
 
         super(RoiPooling, self).__init__(**kwargs)
 
@@ -91,8 +94,9 @@ class RoiPooling(Layer):
             oh = roi_box[1]
             tw = roi_box[2]
             th = roi_box[3]
-            roi = tf.image.crop_to_bounding_box(x, offset_height=oh, offset_width=ow,
-                                                target_height=th, target_width=tw)
+            roi = tf.image.crop_to_bounding_box(
+                x, offset_height=oh, offset_width=ow, target_height=th, target_width=tw
+            )
             pooled_roi = self.pool_roi(roi)
             return pooled_roi
 
@@ -134,8 +138,10 @@ class RoiPooling_OG(Layer):
     def __init__(self, pool_list, num_rois, **kwargs):
 
         self.dim_ordering = K.image_data_format()
-        assert self.dim_ordering in {'channels_last',
-                                     'channels_first'}, 'dim_ordering must be in {channels_last, channels_first}'
+        assert self.dim_ordering in {
+            "channels_last",
+            "channels_first",
+        }, "dim_ordering must be in {channels_last, channels_first}"
 
         self.pool_list = pool_list
         self.num_rois = num_rois
@@ -145,16 +151,16 @@ class RoiPooling_OG(Layer):
         super(RoiPooling_OG, self).__init__(**kwargs)
 
     def build(self, input_shape):
-        if self.dim_ordering == 'channels_first':
+        if self.dim_ordering == "channels_first":
             self.nb_channels = input_shape[0][1]
-        elif self.dim_ordering == 'channels_last':
+        elif self.dim_ordering == "channels_last":
             self.nb_channels = input_shape[0][3]
 
     def compute_output_shape(self, input_shape):
         return None, self.num_rois, self.nb_channels * self.num_outputs_per_channel
 
     def get_config(self):
-        config = {'pool_list': self.pool_list, 'num_rois': self.num_rois}
+        config = {"pool_list": self.pool_list, "num_rois": self.num_rois}
         base_config = super(RoiPooling_OG, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
@@ -181,17 +187,20 @@ class RoiPooling_OG(Layer):
                         y1 = y + jy * row_length[pool_num]
                         y2 = y1 + row_length[pool_num]
 
-                        x1 = K.cast(K.round(x1), 'int32')
-                        x2 = K.cast(K.round(x2), 'int32')
-                        y1 = K.cast(K.round(y1), 'int32')
-                        y2 = K.cast(K.round(y2), 'int32')
+                        x1 = K.cast(K.round(x1), "int32")
+                        x2 = K.cast(K.round(x2), "int32")
+                        y1 = K.cast(K.round(y1), "int32")
+                        y2 = K.cast(K.round(y2), "int32")
 
                         xm = self.crop_to_roi(img, x1, x2, y1, y2)
                         pooled_val = self.pool_roi(xm)
                         outputs.append(pooled_val)
 
         final_output = K.concatenate(outputs, axis=0)
-        final_output = K.reshape(final_output, (1, self.num_rois, self.nb_channels * self.num_outputs_per_channel))
+        final_output = K.reshape(
+            final_output,
+            (1, self.num_rois, self.nb_channels * self.num_outputs_per_channel),
+        )
 
         return final_output
 

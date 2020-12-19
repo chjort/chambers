@@ -60,6 +60,7 @@ def _block_iter(
 
     n_files = tf.shape(files)[0]
     labels = tf.tile([label], [n_files])
+    labels = tf.cast(labels, tf.int64)
 
     block = tf.data.Dataset.from_tensor_slices((files, labels))
 

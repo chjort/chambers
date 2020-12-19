@@ -170,3 +170,16 @@ def InterleaveImageDataset(
         num_parallel_calls=__CONFIG["N_PARALLEL"],
     )
     return td
+
+
+def InterleaveTFRecordDataset(records: list,labels: list,record_cycle_length: int,
+    examples_per_block: int,
+    block_bound=True,
+    sample_block_random=False,
+    shuffle=False,
+    reshuffle_iteration=True,
+    buffer_size=None,
+    seed=None,
+    repeats=None,
+) -> tf.data.Dataset:
+    pass

@@ -1,10 +1,5 @@
 import tensorflow as tf
 
-_SERIALIZE_TENSOR_DESCRIPTION = {
-    "x": tf.io.FixedLenFeature([], tf.string),
-    "y": tf.io.FixedLenFeature([], tf.int64),
-}
-
 
 def _float_feature(value):
     """Returns a float_list from a float / double."""
@@ -23,79 +18,102 @@ def _bytes_feature(value):
     return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
 
 
-def serialize_tensor_example(x, y):
-    feature = {
-        "x": _bytes_feature(tf.io.serialize_tensor(x)),
-        "y": _int_feature(y),
-    }
+def _get_tensor_ids(dictionary):
+    """ Extract the tensor Ids from dictionary which is either a feature or description"""
+    tensor_ids = [k.split("_")[0] for k in dictionary.keys()]
+    unique_tensor_ids = list(set(tensor_ids))
+    return sorted(unique_tensor_ids)
+
+
+def _make_feature(tensors):
+    if not isinstance(tensors, (list, tuple)):
+        tensors = (tensors,)
+
+    feature = {}
+    for i, t in enumerate(tensors):
+        name = "t" + str(i)
+
+        dtype = t.dtype
+
+        if t.shape != ():
+            t = tf.io.serialize_tensor(t)
+
+        ftype = t.dtype
+        if ftype.is_floating:
+            raw_feature = _float_feature(t)
+        elif ftype.is_integer:
+            raw_feature = _int_feature(t)
+        elif ftype == tf.string:
+            raw_feature = _bytes_feature(t)
+        else:
+            raise ValueError("Invalid dtype {}.".format(ftype))
+
+        feature[name + "_raw"] = raw_feature
+        feature[name + "_dtype"] = _int_feature(dtype.as_datatype_enum)
+        feature[name + "_ftype"] = _int_feature(ftype.as_datatype_enum)
+
+    return feature
+
+
+def _make_description(feature):
+    tensors_ids = _get_tensor_ids(feature)
+
+    description = {}
+    for tn in tensors_ids:
+        dtype = feature[tn + "_ftype"].int64_list.value[0]
+        description[tn + "_raw"] = tf.io.FixedLenFeature([], tf.DType(dtype))
+
+        description[tn + "_dtype"] = tf.io.FixedLenFeature([], tf.int64)
+        description[tn + "_ftype"] = tf.io.FixedLenFeature([], tf.int64)
+
+    return description
+
+
+def _feature_to_example(feature):
     sample_proto = tf.train.Example(features=tf.train.Features(feature=feature))
     return sample_proto.SerializeToString()
 
 
-def batch_deserialize_tensor_example(x, dtype=tf.float32):
-    batch_size = x.shape[0]
-    tensor_example = tf.io.parse_example(x, _SERIALIZE_TENSOR_DESCRIPTION)
-
-    @tf.function
-    def _parse_tensor_dtype(x):
-        return tf.io.parse_tensor(x, out_type=dtype)
-
-    x = tf.map_fn(
-        _parse_tensor_dtype,
-        tensor_example["x"],
-        dtype=dtype,
-        parallel_iterations=8,
-        infer_shape=False,
-    )
-    x.set_shape([batch_size, None, None, 3])
-    y = tensor_example["y"]
-
-    return x, y
+def _serialize_example(*args):
+    feature = _make_feature(args)
+    example = _feature_to_example(feature)
+    return example
 
 
-def batch_deserialize_tensor_example_uint8(x):
-    return batch_deserialize_tensor_example(x, tf.uint8)
+def serialize_example(*args):
+    example = tf.py_function(_serialize_example, args, tf.string)
+    return tf.reshape(example, [])
 
 
-def batch_deserialize_tensor_example_int32(x):
-    return batch_deserialize_tensor_example(x, tf.int32)
+def _make_feature_deserialize_fn(feature):
+    description = _make_description(feature)
+    tensor_ids = _get_tensor_ids(feature)
+    dtypes = [
+        tf.as_dtype(feature[tn + "_dtype"].int64_list.value[0]) for tn in tensor_ids
+    ]
+    ftypes = [
+        tf.as_dtype(feature[tn + "_ftype"].int64_list.value[0]) for tn in tensor_ids
+    ]
+    do_convert = [dtype != ftype for dtype, ftype in zip(dtypes, ftypes)]
+
+    def deserialize_fn(x):
+        tensor_example = tf.io.parse_example(x, description)
+        tensors = []
+        for tn, dtype, convert in zip(tensor_ids, dtypes, do_convert):
+            name = tn + "_raw"
+            t = tensor_example[name]
+            if convert:
+                t = tf.io.parse_tensor(t, out_type=dtype)
+            tensors.append(t)
+
+        return tuple(tensors)
+
+    return deserialize_fn
 
 
-def batch_deserialize_tensor_example_int64(x):
-    return batch_deserialize_tensor_example(x, tf.int64)
+def make_dataset_deserialize_fn(dataset):
+    sample = next(iter(dataset))
 
-
-def batch_deserialize_tensor_example_float32(x):
-    return batch_deserialize_tensor_example(x, tf.float32)
-
-
-def batch_deserialize_tensor_example_float64(x):
-    return batch_deserialize_tensor_example(x, tf.float64)
-
-
-def deserialize_tensor_example(x, dtype=tf.float32):
-    tensor_example = tf.io.parse_single_example(x, _SERIALIZE_TENSOR_DESCRIPTION)
-
-    x = tf.io.parse_tensor(tensor_example["x"], out_type=dtype)
-    y = tensor_example["y"]
-    return x, y
-
-
-def deserialize_tensor_example_uint8(x):
-    return deserialize_tensor_example(x, tf.uint8)
-
-
-def deserialize_tensor_example_int32(x):
-    return deserialize_tensor_example(x, tf.int32)
-
-
-def deserialize_tensor_example_int64(x):
-    return deserialize_tensor_example(x, tf.int64)
-
-
-def deserialize_tensor_example_float32(x):
-    return deserialize_tensor_example(x, tf.float32)
-
-
-def deserialize_tensor_example_float64(x):
-    return deserialize_tensor_example(x, tf.float64)
+    example_features = tf.train.Example.FromString(sample.numpy())
+    feature = example_features.features.feature
+    return _make_feature_deserialize_fn(feature)

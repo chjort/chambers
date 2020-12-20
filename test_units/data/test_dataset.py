@@ -31,7 +31,7 @@ class TestGetInputLen:
 
 
 class TestDataset(tf.test.TestCase):
-    nested_data_path = "test_units/datasets/mnist/train"
+    nested_data_path = "test_units/sample_data/mnist/train"
     class_dirs = sorted(read_nested_set(nested_data_path))
     labels = list(range(len(class_dirs)))
 
@@ -73,7 +73,7 @@ class TestDataset(tf.test.TestCase):
 
 
 class TestBlockIter(tf.test.TestCase):
-    nested_data_path = "test_units/datasets/mnist/train"
+    nested_data_path = "test_units/sample_data/mnist/train"
     class_dir = os.path.join(nested_data_path, "0")
     label = 0
     slices = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]

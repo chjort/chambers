@@ -4,7 +4,7 @@ import tensorflow as tf
 
 from chambers.data.read import read_nested_set, read_img_files, read_and_decode_image
 
-nested_data_path = "test_units/datasets/mnist/train"
+nested_data_path = "test_units/sample_data/mnist/train"
 img_folder = os.path.join(nested_data_path, "1")
 img_file = os.path.join(img_folder, "3.png")
 

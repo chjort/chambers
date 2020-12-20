@@ -106,7 +106,12 @@ def _make_feature_deserialize_fn(feature):
                 t = tf.io.parse_tensor(t, out_type=dtype)
             tensors.append(t)
 
-        return tuple(tensors)
+        if len(tensors) == 1:
+            tensors = tensors[0]
+        else:
+            tensors = tuple(tensors)
+
+        return tensors
 
     return deserialize_fn
 

@@ -110,7 +110,12 @@ def _make_feature_deserialize_fn(feature, set_shape=False, set_size=False):
     dtypes = [
         tf.as_dtype(feature[tn + "_dtype"].int64_list.value[0]) for tn in tensor_ids
     ]
-    shapes = [feature[tn + "_shape"].int64_list.value for tn in tensor_ids]
+    if set_shape:
+        shapes = [feature[tn + "_shape"].int64_list.value for tn in tensor_ids]
+    elif set_size:
+        shapes = [
+            [None] * len(feature[tn + "_shape"].int64_list.value) for tn in tensor_ids
+        ]
 
     def deserialize_fn(x):
         tensor_example = tf.io.parse_example(x, description)
@@ -124,12 +129,9 @@ def _make_feature_deserialize_fn(feature, set_shape=False, set_size=False):
             if serialized:
                 t = tf.io.parse_tensor(t, out_type=dtype)
 
-            if set_shape:
+            if set_shape or set_size:
                 shape = shapes[i]
                 t.set_shape(shape)
-            elif set_size:
-                shape = tensor_example[tn + "_shape"]
-                t = tf.reshape(t, shape)
 
             tensors.append(t)
 

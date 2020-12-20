@@ -35,22 +35,23 @@ def _make_feature(tensors):
 
         dtype = t.dtype
 
-        if t.shape != ():
+        if t.shape != ():  # if tensor is not a scalar, we have to serialize it.
             t = tf.io.serialize_tensor(t)
+            feature[name + "_serialized"] = _int_feature(1)
+        else:
+            feature[name + "_serialized"] = _int_feature(0)
 
-        ftype = t.dtype
-        if ftype.is_floating:
+        if t.dtype.is_floating:
             raw_feature = _float_feature(t)
-        elif ftype.is_integer:
+        elif t.dtype.is_integer:
             raw_feature = _int_feature(t)
-        elif ftype == tf.string:
+        elif t.dtype == tf.string:
             raw_feature = _bytes_feature(t)
         else:
-            raise ValueError("Invalid dtype {}.".format(ftype))
+            raise ValueError("Invalid dtype {}.".format(t.dtype))
 
         feature[name + "_raw"] = raw_feature
         feature[name + "_dtype"] = _int_feature(dtype.as_datatype_enum)
-        feature[name + "_ftype"] = _int_feature(ftype.as_datatype_enum)
 
     return feature
 
@@ -60,11 +61,16 @@ def _make_description(feature):
 
     description = {}
     for tn in tensors_ids:
-        dtype = feature[tn + "_ftype"].int64_list.value[0]
-        description[tn + "_raw"] = tf.io.FixedLenFeature([], tf.DType(dtype))
+        is_serialized = feature[tn + "_serialized"].int64_list.value[0]
+        dtype = feature[tn + "_dtype"].int64_list.value[0]
+
+        description[tn + "_serialized"] = tf.io.FixedLenFeature([], tf.int64)
+        if is_serialized:
+            description[tn + "_raw"] = tf.io.FixedLenFeature([], tf.string)
+        else:
+            description[tn + "_raw"] = tf.io.FixedLenFeature([], tf.as_dtype(dtype))
 
         description[tn + "_dtype"] = tf.io.FixedLenFeature([], tf.int64)
-        description[tn + "_ftype"] = tf.io.FixedLenFeature([], tf.int64)
 
     return description
 
@@ -91,18 +97,17 @@ def _make_feature_deserialize_fn(feature):
     dtypes = [
         tf.as_dtype(feature[tn + "_dtype"].int64_list.value[0]) for tn in tensor_ids
     ]
-    ftypes = [
-        tf.as_dtype(feature[tn + "_ftype"].int64_list.value[0]) for tn in tensor_ids
+    is_serialized = [
+        feature[tn + "_serialized"].int64_list.value[0] for tn in tensor_ids
     ]
-    do_convert = [dtype != ftype for dtype, ftype in zip(dtypes, ftypes)]
 
     def deserialize_fn(x):
         tensor_example = tf.io.parse_example(x, description)
         tensors = []
-        for tn, dtype, convert in zip(tensor_ids, dtypes, do_convert):
+        for tn, dtype, serialized in zip(tensor_ids, dtypes, is_serialized):
             name = tn + "_raw"
             t = tensor_example[name]
-            if convert:
+            if serialized:
                 t = tf.io.parse_tensor(t, out_type=dtype)
             tensors.append(t)
 

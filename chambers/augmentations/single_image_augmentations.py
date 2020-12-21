@@ -7,14 +7,6 @@ def random_rot90(x, seed=None):
     return rot_x
 
 
-def random_flip_up_down(x, seed=None):
-    return tf.image.random_flip_up_down(x, seed=seed)
-
-
-def random_flip_left_right(x, seed=None):
-    return tf.image.random_flip_left_right(x, seed=seed)
-
-
 def random_crop(x, height, width, seed=None):
     x_rank = x.shape.ndims
 
@@ -65,11 +57,15 @@ def center_crop(x, height, width, input_height=None, input_width=None):
     return cropped_x
 
 
-def center_crop_fraction(x, center_fraction):
-    return tf.image.central_crop(x, central_fraction=center_fraction)
+def resize(x, size=None, min_side=None, max_side=None):
+    if size is not None:
+        h, w = size
+        return _resize(x, h, w)
+    else:
+        return _resize_min_max(x, min_side, max_side)
 
 
-def resize(x, height, width):
+def _resize(x, height, width):
     """
     Resizes images to a specified height and width.
 
@@ -79,28 +75,51 @@ def resize(x, height, width):
     :return: numpy nd-array - the resized image.
     """
 
+    height = tf.convert_to_tensor(height)
+    width = tf.convert_to_tensor(width)
+
     # if h is a multiplier, multiply it with the original height
-    if isinstance(height, float):
+    if height.dtype.is_floating:
         imgh = tf.cast(tf.shape(x)[0], tf.float32)
-        height = int(height * imgh)
+        height = tf.cast(height * imgh, tf.int32)
 
     # if w is a multiplier, multiply it with the original width
-    if isinstance(width, float):
+    if width.dtype.is_floating:
         imgw = tf.cast(tf.shape(x)[1], tf.float32)
-        width = int(width * imgw)
+        width = tf.cast(width * imgw, tf.int32)
 
     x = tf.image.resize(x, (height, width))
     return x
 
 
-def resize_max(x, max_size):
-    h, w = x.shape[:2]
-    if h > max_size:
-        h = max_size / h
-    if w > max_size:
-        w = max_size / w
+def _resize_min_max(x, min_side=None, max_side=None):
+    """
+    Resize an image to have its smallest side equal 'min_side' or its largest side equal 'max_side'.
+    If both 'min_side' and 'max_side' is given, image will be resized to the side that scales down the image the most.
+    Keeps aspect ratio of the image.
+    """
 
-    x = resize(x, h, w)
+    h = tf.cast(tf.shape(x)[0], tf.float32)
+    w = tf.cast(tf.shape(x)[1], tf.float32)
+
+    if min_side is not None and max_side is not None:
+        cur_min_side = tf.minimum(w, h)
+        min_side = tf.cast(min_side, tf.float32)
+        cur_max_side = tf.maximum(w, h)
+        max_side = tf.cast(max_side, tf.float32)
+        scale = tf.minimum(max_side / cur_max_side, min_side / cur_min_side)
+    elif min_side is not None:
+        cur_min_side = tf.minimum(w, h)
+        min_side = tf.cast(min_side, tf.float32)
+        scale = min_side / cur_min_side
+    elif max_side is not None:
+        cur_max_side = tf.maximum(w, h)
+        max_side = tf.cast(max_side, tf.float32)
+        scale = max_side / cur_max_side
+    else:
+        raise ValueError("Must specify either 'min_side' or 'max_side'.")
+
+    x = _resize(x, scale, scale)
     return x
 
 
@@ -133,7 +152,6 @@ def tf_normalize(x):
 
 def normalize_image(x, mean, std=None):
     """ Normalizes an image with mean and standard deviation """
-    x = tf.cast(x, tf.float32)
     mean = tf.constant(mean, dtype=tf.float32)
 
     # subtract mean

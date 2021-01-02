@@ -37,27 +37,12 @@ def _make_feature(tensors):
 
     feature = {}
     for i, t in enumerate(tensors):
-        name = "t" + str(i)
-
+        t_raw = tf.io.serialize_tensor(t)
         dtype = t.dtype
         shape = tf.shape(t)
 
-        if t.shape != ():  # if tensor is not a scalar, we have to serialize it.
-            t = tf.io.serialize_tensor(t)
-            feature[name + "_serialized"] = _int_feature(1)
-        else:
-            feature[name + "_serialized"] = _int_feature(0)
-
-        if t.dtype.is_floating:
-            raw_feature = _float_feature(t)
-        elif t.dtype.is_integer:
-            raw_feature = _int_feature(t)
-        elif t.dtype == tf.string:
-            raw_feature = _bytes_feature(t)
-        else:
-            raise ValueError("Invalid dtype {}.".format(t.dtype))
-
-        feature[name + "_raw"] = raw_feature
+        name = "t" + str(i)
+        feature[name + "_raw"] = _bytes_feature(t_raw)
         feature[name + "_dtype"] = _int_feature(dtype.as_datatype_enum)
         feature[name + "_shape"] = _int_feature(shape)
 
@@ -69,16 +54,9 @@ def _make_description(feature):
 
     description = {}
     for tn in tensors_ids:
-        is_serialized = feature[tn + "_serialized"].int64_list.value[0]
-        dtype = feature[tn + "_dtype"].int64_list.value[0]
         shape = feature[tn + "_shape"].int64_list.value
 
-        description[tn + "_serialized"] = tf.io.FixedLenFeature([], tf.int64)
-        if is_serialized:
-            description[tn + "_raw"] = tf.io.FixedLenFeature([], tf.string)
-        else:
-            description[tn + "_raw"] = tf.io.FixedLenFeature([], tf.as_dtype(dtype))
-
+        description[tn + "_raw"] = tf.io.FixedLenFeature([], tf.string)
         description[tn + "_dtype"] = tf.io.FixedLenFeature([], tf.int64)
         description[tn + "_shape"] = tf.io.FixedLenFeature([len(shape)], tf.int64)
 
@@ -104,9 +82,6 @@ def serialize_example(*args):
 def _make_feature_deserialize_fn(feature, set_shape=False, set_size=False):
     description = _make_description(feature)
     tensor_ids = _get_tensor_ids(feature)
-    is_serialized = [
-        feature[tn + "_serialized"].int64_list.value[0] for tn in tensor_ids
-    ]
     dtypes = [
         tf.as_dtype(feature[tn + "_dtype"].int64_list.value[0]) for tn in tensor_ids
     ]
@@ -122,12 +97,10 @@ def _make_feature_deserialize_fn(feature, set_shape=False, set_size=False):
         tensors = []
         for i, tn in enumerate(tensor_ids):
             name = tn + "_raw"
-            serialized = is_serialized[i]
             dtype = dtypes[i]
 
             t = tensor_example[name]
-            if serialized:
-                t = tf.io.parse_tensor(t, out_type=dtype)
+            t = tf.io.parse_tensor(t, out_type=dtype)
 
             if set_shape or set_size:
                 shape = shapes[i]

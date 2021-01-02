@@ -79,7 +79,7 @@ class TestTFRecord(tf.test.TestCase):
 
         self.assertEqual(td.element_spec[0], tf.TensorSpec(shape=None, dtype=tf.uint8))
         self.assertEqual(
-            td.element_spec[1], tf.TensorSpec(shape=(), dtype=tf.int64, name=None)
+            td.element_spec[1], tf.TensorSpec(shape=None, dtype=tf.int64, name=None)
         )
 
         batch_d = next(iter(td))
@@ -152,7 +152,7 @@ class TestTFRecord(tf.test.TestCase):
             td.element_spec[0], tf.TensorSpec(shape=None, dtype=tf.float32)
         )
         self.assertEqual(
-            td.element_spec[1], tf.TensorSpec(shape=(), dtype=tf.int64, name=None)
+            td.element_spec[1], tf.TensorSpec(shape=None, dtype=tf.int64, name=None)
         )
 
         batch_d = next(iter(td))

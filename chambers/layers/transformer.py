@@ -133,16 +133,37 @@ class DecoderLayer(tf.keras.layers.Layer):
         return dict(list(base_config.items()) + list(config.items()))
 
 
-class BaseEncoder(tf.keras.layers.Layer):
-    def __init__(self, layers, norm=False, **kwargs):
-        super(BaseEncoder, self).__init__(**kwargs)
+class Encoder(tf.keras.layers.Layer):
+    def __init__(
+        self,
+        embed_dim,
+        num_heads,
+        ff_dim,
+        num_layers,
+        dropout_rate=0.1,
+        norm=False,
+        **kwargs
+    ):
+        self.embed_dim = embed_dim
+        self.num_heads = num_heads
+        self.ff_dim = ff_dim
+        self.num_layers = num_layers
+        self.dropout_rate = dropout_rate
         self.norm = norm
+
         if norm:
             self.norm_layer = tf.keras.layers.LayerNormalization(epsilon=1e-5)
         else:
             self.norm_layer = None
-        self.layers = layers
         self.supports_masking = True
+
+        super(Encoder, self).__init__(**kwargs)
+
+    def build(self, input_shape):
+        self.layers = [
+            EncoderLayer(self.embed_dim, self.num_heads, self.ff_dim, self.dropout_rate)
+            for i in range(self.num_layers)
+        ]
 
     def call(self, inputs, mask=None, **kwargs):
         x = inputs
@@ -155,22 +176,59 @@ class BaseEncoder(tf.keras.layers.Layer):
         return x
 
     def get_config(self):
-        config = {"norm": self.norm}
-        base_config = super(BaseEncoder, self).get_config()
+        config = {
+            "embed_dim": self.embed_dim,
+            "num_heads": self.num_heads,
+            "ff_dim": self.ff_dim,
+            "dropout_rate": self.dropout_rate,
+            "num_layers": self.num_layers,
+            "norm": self.norm,
+        }
+        base_config = super(Encoder, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
 
-class BaseDecoder(tf.keras.layers.Layer):
-    def __init__(self, layers, norm=False, return_sequence=False, **kwargs):
-        super(BaseDecoder, self).__init__(**kwargs)
+class Decoder(tf.keras.layers.Layer):
+    def __init__(
+        self,
+        embed_dim,
+        num_heads,
+        ff_dim,
+        num_layers,
+        dropout_rate=0.1,
+        norm=False,
+        causal=True,
+        return_sequence=False,
+        **kwargs
+    ):
+        self.embed_dim = embed_dim
+        self.num_heads = num_heads
+        self.ff_dim = ff_dim
+        self.num_layers = num_layers
+        self.dropout_rate = dropout_rate
+        self.causal = causal
+
         self.norm = norm
         if norm:
             self.norm_layer = tf.keras.layers.LayerNormalization(epsilon=1e-5)
         else:
             self.norm_layer = None
         self.return_sequence = return_sequence
-        self.layers = layers
         self.supports_masking = True
+
+        super(Decoder, self).__init__(**kwargs)
+
+    def build(self, input_shape):
+        self.layers = [
+            DecoderLayer(
+                self.embed_dim,
+                self.num_heads,
+                self.ff_dim,
+                self.dropout_rate,
+                self.causal,
+            )
+            for i in range(self.num_layers)
+        ]
 
     def call(self, inputs, mask=None, **kwargs):
         x, x_encoder = inputs
@@ -200,73 +258,6 @@ class BaseDecoder(tf.keras.layers.Layer):
         return None
 
     def get_config(self):
-        config = {"norm": self.norm, "return_sequence": self.return_sequence}
-        base_config = super(BaseDecoder, self).get_config()
-        return dict(list(base_config.items()) + list(config.items()))
-
-
-class Encoder(BaseEncoder):
-    def __init__(
-        self,
-        embed_dim,
-        num_heads,
-        ff_dim,
-        num_layers,
-        dropout_rate=0.1,
-        norm=False,
-        **kwargs
-    ):
-        self.embed_dim = embed_dim
-        self.num_heads = num_heads
-        self.ff_dim = ff_dim
-        self.num_layers = num_layers
-        self.dropout_rate = dropout_rate
-        layers = [
-            EncoderLayer(embed_dim, num_heads, ff_dim, dropout_rate)
-            for i in range(num_layers)
-        ]
-        super(Encoder, self).__init__(layers=layers, norm=norm, **kwargs)
-
-    def get_config(self):
-        config = {
-            "embed_dim": self.embed_dim,
-            "num_heads": self.num_heads,
-            "ff_dim": self.ff_dim,
-            "dropout_rate": self.dropout_rate,
-            "num_layers": self.num_layers,
-        }
-        base_config = super(Encoder, self).get_config()
-        return dict(list(base_config.items()) + list(config.items()))
-
-
-class Decoder(BaseDecoder):
-    def __init__(
-        self,
-        embed_dim,
-        num_heads,
-        ff_dim,
-        num_layers,
-        dropout_rate=0.1,
-        norm=False,
-        causal=True,
-        return_sequence=False,
-        **kwargs
-    ):
-        self.embed_dim = embed_dim
-        self.num_heads = num_heads
-        self.ff_dim = ff_dim
-        self.num_layers = num_layers
-        self.dropout_rate = dropout_rate
-        self.causal = causal
-        layers = [
-            DecoderLayer(embed_dim, num_heads, ff_dim, dropout_rate, causal)
-            for i in range(num_layers)
-        ]
-        super(Decoder, self).__init__(
-            layers=layers, norm=norm, return_sequence=return_sequence, **kwargs
-        )
-
-    def get_config(self):
         config = {
             "embed_dim": self.embed_dim,
             "num_heads": self.num_heads,
@@ -274,6 +265,8 @@ class Decoder(BaseDecoder):
             "dropout_rate": self.dropout_rate,
             "num_layers": self.num_layers,
             "causal": self.causal,
+            "norm": self.norm,
+            "return_sequence": self.return_sequence,
         }
         base_config = super(Decoder, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))

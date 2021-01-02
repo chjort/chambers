@@ -1,6 +1,7 @@
 import tensorflow as tf
 from einops.layers.tensorflow import Rearrange
 
+from chambers.activations import gelu
 from chambers.layers.embedding import (
     PositionalEmbedding1D,
     ConcatEmbedding,
@@ -95,7 +96,7 @@ def VisionTransformer(
 
     x = tf.keras.Sequential(
         [
-            tf.keras.layers.Dense(ff_dim, activation=tf.nn.gelu),
+            tf.keras.layers.Dense(ff_dim, activation=gelu),
             tf.keras.layers.Dense(n_classes),
         ],
         name="mlp_head",

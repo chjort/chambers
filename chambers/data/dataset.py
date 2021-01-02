@@ -36,6 +36,41 @@ def _shuffle_repeat(
     return dataset
 
 
+def _get_input_len(inputs):
+    input_ndims = np.ndim(inputs)
+    if input_ndims == 1:
+        input_len = len(inputs)
+    elif input_ndims > 1:
+        input_len = len(inputs[0])
+    else:
+        raise ValueError("Input with 0 dimensions has no length.")
+
+    return input_len
+
+
+def _sequential_dataset(
+    inputs,
+    shuffle=False,
+    reshuffle_iteration=True,
+    buffer_size=None,
+    seed=None,
+    repeats=None,
+):
+    if buffer_size is None:
+        buffer_size = _get_input_len(inputs)
+
+    td = tf.data.Dataset.from_tensor_slices(inputs)
+    td = _shuffle_repeat(
+        td,
+        shuffle=shuffle,
+        buffer_size=buffer_size,
+        reshuffle_iteration=reshuffle_iteration,
+        seed=seed,
+        repeats=repeats,
+    )
+    return td
+
+
 def _random_upsample(x, n, seed=None):
     n_x = tf.shape(x)[0]
     diff = n - n_x
@@ -69,18 +104,6 @@ def _block_iter(
     return block
 
 
-def _get_input_len(inputs):
-    input_ndims = np.ndim(inputs)
-    if input_ndims == 1:
-        input_len = len(inputs)
-    elif input_ndims > 1:
-        input_len = len(inputs[0])
-    else:
-        raise ValueError("Input with 0 dimensions has no length.")
-
-    return input_len
-
-
 def _interleave_image_files(
     input_dir,
     label,
@@ -112,15 +135,11 @@ def _interleave_dataset(
     seed=None,
     repeats=None,
 ):
-    if buffer_size is None:
-        buffer_size = _get_input_len(inputs)
-
-    td = tf.data.Dataset.from_tensor_slices(inputs)
-    td = _shuffle_repeat(
-        td,
+    td = _sequential_dataset(
+        inputs,
         shuffle=shuffle,
-        buffer_size=buffer_size,
         reshuffle_iteration=reshuffle_iteration,
+        buffer_size=buffer_size,
         seed=seed,
         repeats=repeats,
     )
@@ -147,6 +166,10 @@ def InterleaveImageDataset(
     seed=None,
     repeats=None,
 ) -> tf.data.Dataset:
+    """
+    Constructs a tensorflow.data.Dataset which loads images by interleaving through input folders.
+    """
+
     interleave_fn = partial(
         _interleave_image_files,
         block_length=images_per_block,
@@ -172,17 +195,39 @@ def InterleaveImageDataset(
     return td
 
 
-def InterleaveTFRecordDataset(
-    records: list,
+def SequentialImageDataset(
+    class_dirs: list,
     labels: list,
-    record_cycle_length: int,
-    examples_per_block: int,
-    block_bound=True,
-    sample_block_random=False,
+    image_channels=3,
     shuffle=False,
     reshuffle_iteration=True,
     buffer_size=None,
     seed=None,
     repeats=None,
 ) -> tf.data.Dataset:
-    pass
+    """
+    Constructs a tensorflow.data.Dataset which sequentially loads images from input folders.
+    """
+
+    td = _sequential_dataset(
+        inputs=(class_dirs, labels),
+        shuffle=shuffle,
+        reshuffle_iteration=reshuffle_iteration,
+        buffer_size=buffer_size,
+        seed=seed,
+        repeats=repeats,
+    )
+
+    def flat_map_fn(input_dir, label):
+        files = read_img_files(input_dir)
+        n_files = tf.shape(files)[0]
+        y = tf.tile([label], [n_files])
+        return tf.data.Dataset.from_tensor_slices((files, y))
+
+    td = td.flat_map(flat_map_fn)
+
+    td = td.map(
+        lambda x, y: (read_and_decode_image(x, channels=image_channels), y),
+        num_parallel_calls=__CONFIG["N_PARALLEL"],
+    )
+    return td

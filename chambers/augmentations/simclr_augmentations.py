@@ -207,11 +207,15 @@ def _compute_crop_shape(image_height, image_width, aspect_ratio, crop_proportion
         crop_height = tf.cast(
             tf.math.rint(crop_proportion / aspect_ratio * image_width_float), tf.int32
         )
-        crop_width = tf.cast(tf.math.rint(crop_proportion * image_width_float), tf.int32)
+        crop_width = tf.cast(
+            tf.math.rint(crop_proportion * image_width_float), tf.int32
+        )
         return crop_height, crop_width
 
     def _image_wider_than_requested_aspect_ratio():
-        crop_height = tf.cast(tf.math.rint(crop_proportion * image_height_float), tf.int32)
+        crop_height = tf.cast(
+            tf.math.rint(crop_proportion * image_height_float), tf.int32
+        )
         crop_width = tf.cast(
             tf.math.rint(crop_proportion * aspect_ratio * image_height_float), tf.int32
         )
@@ -331,7 +335,9 @@ def crop_and_resize(image, height, width):
         scope=None,
     )
     # return tf.image.resize_bicubic([image], [height, width])[0]
-    return tf.image.resize(image, size=[height, width], method=tf.image.ResizeMethod.BICUBIC)
+    return tf.image.resize(
+        image, size=[height, width], method=tf.image.ResizeMethod.BICUBIC
+    )
 
 
 def gaussian_blur(image, kernel_size, sigma, padding="SAME"):

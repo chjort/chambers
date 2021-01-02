@@ -23,21 +23,17 @@ def random_crop(x, height, width, seed=None):
     return cropped_x
 
 
-def center_crop(x, height, width, input_height=None, input_width=None):
+def center_crop(x, height, width):
     x_rank = x.shape.ndims
 
-    if input_height is not None:
-        h = input_height
-    elif x_rank == 4:
+    if x_rank == 4:
         h = x.shape[1]
     elif x_rank == 3:
         h = x.shape[0]
     else:
         raise ValueError("Input must have rank of 3 or 4. Found rank {}".format(x_rank))
 
-    if input_width is not None:
-        w = input_width
-    elif x_rank == 4:
+    if x_rank == 4:
         w = x.shape[2]
     elif x_rank == 3:
         w = x.shape[1]

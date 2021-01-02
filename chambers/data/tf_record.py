@@ -145,7 +145,7 @@ def _make_feature_deserialize_fn(feature, set_shape=False, set_size=False):
     return deserialize_fn
 
 
-def make_dataset_deserialize_fn(dataset, set_shape=False, set_size=False):
+def make_dataset_deserialize_fn(dataset, set_shape=False, set_size=False) -> callable:
     sample = next(iter(dataset))
 
     example_features = tf.train.Example.FromString(sample.numpy())

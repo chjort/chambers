@@ -133,7 +133,7 @@ def dataset_to_tfrecord(dataset, path):
     writer.write(dataset)
 
 
-def tfrecord_to_dataset(paths, set_shape=False, set_size=False) -> tf.data.Dataset:
+def tfrecord_to_dataset(paths, set_shape=True, set_size=False) -> tf.data.Dataset:
     td = tf.data.TFRecordDataset(paths)
     td = td.map(make_dataset_deserialize_fn(td, set_shape=set_shape, set_size=set_size))
     return td

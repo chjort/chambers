@@ -83,21 +83,21 @@ def _random_upsample(x, n, seed=None):
 
 
 def _block_iter(
-    files, label, block_length, block_bound=True, sample_block_random=False, seed=None
+    block, label, block_length, block_bound=True, sample_block_random=False, seed=None
 ):
-    n_files = tf.shape(files)[0]
+    n_files = tf.shape(block)[0]
 
     if n_files < block_length:
-        files = _random_upsample(files, block_length)
+        block = _random_upsample(block, block_length)
 
     if sample_block_random:
-        files = tf.random.shuffle(files, seed=seed)
+        block = tf.random.shuffle(block, seed=seed)
 
-    n_files = tf.shape(files)[0]
+    n_files = tf.shape(block)[0]
     labels = tf.tile([label], [n_files])
     labels = tf.cast(labels, tf.int64)
 
-    block = tf.data.Dataset.from_tensor_slices((files, labels))
+    block = tf.data.Dataset.from_tensor_slices((block, labels))
 
     if block_bound:
         block = block.take(block_length)
@@ -113,7 +113,7 @@ def _interleave_image_files(
     seed=None,
 ):
     class_files = read_img_files(input_dir)
-    block = _block_iter(
+    block_iter = _block_iter(
         class_files,
         label,
         block_length=block_length,
@@ -121,7 +121,7 @@ def _interleave_image_files(
         sample_block_random=sample_block_random,
         seed=seed,
     )
-    return block
+    return block_iter
 
 
 def _interleave_dataset(

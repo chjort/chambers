@@ -89,8 +89,8 @@ class TestBlockIter(tf.test.TestCase):
     def test_block_iter0(self):
         files = read_img_files(self.class_dir)
 
-        block = _block_iter(
-            files=files,
+        block_iter = _block_iter(
+            block=files,
             label=self.label,
             block_length=2,
             block_bound=False,
@@ -100,7 +100,7 @@ class TestBlockIter(tf.test.TestCase):
 
         labels = [self.label] * len(files)
         files_list = list(zip(files, labels))
-        block_list = list(block)
+        block_list = list(block_iter)
         self.assertEqual(block_list, files_list)
 
     def test_block_iter1(self):
@@ -108,8 +108,8 @@ class TestBlockIter(tf.test.TestCase):
 
         block_len = 2
 
-        block = _block_iter(
-            files=files,
+        block_iter = _block_iter(
+            block=files,
             label=self.label,
             block_length=block_len,
             block_bound=True,
@@ -119,14 +119,14 @@ class TestBlockIter(tf.test.TestCase):
 
         labels = [self.label] * len(files)
         files_list = list(zip(files, labels))[:block_len]
-        block_list = list(block)
+        block_list = list(block_iter)
         self.assertEqual(block_list, files_list)
 
     def test_block_iter2(self):
         files = read_img_files(self.class_dir)
 
-        block = _block_iter(
-            files=files,
+        block_iter = _block_iter(
+            block=files,
             label=self.label,
             block_length=2,
             block_bound=False,
@@ -136,7 +136,7 @@ class TestBlockIter(tf.test.TestCase):
 
         labels = [self.label] * len(files)
         files_list = list(zip(files, labels))
-        block_list = list(block)
+        block_list = list(block_iter)
         self.assertNotEqual(block_list, files_list)
 
     def test_block_iter3(self):
@@ -144,8 +144,8 @@ class TestBlockIter(tf.test.TestCase):
 
         block_len = 2
 
-        block = _block_iter(
-            files=files,
+        block_iter = _block_iter(
+            block=files,
             label=self.label,
             block_length=block_len,
             block_bound=True,
@@ -155,7 +155,7 @@ class TestBlockIter(tf.test.TestCase):
 
         labels = [self.label] * len(files)
         files_list = list(zip(files, labels))[:block_len]
-        block_list = list(block)
+        block_list = list(block_iter)
         self.assertNotEqual(block_list, files_list)
 
 

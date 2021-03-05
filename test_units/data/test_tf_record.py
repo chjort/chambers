@@ -2,7 +2,7 @@ import pytest
 import tensorflow as tf
 from tensorflow.python.framework.errors_impl import InvalidArgumentError
 
-from chambers.data.dataset import InterleaveImageDataset
+from chambers.data.dataset import InterleaveImageClassDataset
 from chambers.data.load import match_nested_set
 from chambers.data.tf_record import serialize_example, make_dataset_deserialize_fn
 
@@ -19,7 +19,7 @@ class TestTFRecord(tf.test.TestCase):
     class_dirs = sorted(match_nested_set(nested_data_path))
     labels = list(range(len(class_dirs)))
 
-    td = InterleaveImageDataset(
+    td = InterleaveImageClassDataset(
         class_dirs=class_dirs,
         labels=labels,
         class_cycle_length=5,

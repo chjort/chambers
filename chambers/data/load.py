@@ -3,6 +3,26 @@ import os
 
 import tensorflow as tf
 
+VALID_IMAGE_EXTENTIONS = [
+    "jpg",
+    "jpeg",
+    "png",
+    "bmp",
+    "gif",
+    "JPG",
+    "JPEG",
+    "PNG",
+    "BMP",
+    "GIF",
+]
+
+
+def validate_dir_path(dir_path):
+    """ Add "/" to dir_path if it does not already end with "/" """
+    if tf.strings.substr(dir_path, -1, 1) != "/":
+        dir_path = tf.strings.join([dir_path, "/"])
+    return dir_path
+
 
 def match_nested_set(path):
     return glob.glob(os.path.join(path, "*/"))
@@ -16,34 +36,34 @@ def match_img_files(dir_path):
     :param dir_path: Path to directory containing files
     :return: 1-D Tensor containing file paths of matched files
     """
+    dir_path = validate_dir_path(dir_path)
 
-    # add "/" to dir_path if it does not already end with "/"
-    if tf.strings.substr(dir_path, -1, 1) != "/":
-        dir_path = tf.strings.join([dir_path, "/"])
-
-    valid_extensions = [
-        "jpg",
-        "jpeg",
-        "png",
-        "bmp",
-        "gif",
-        "JPG",
-        "JPEG",
-        "PNG",
-        "BMP",
-        "GIF",
-    ]
+    # define patterns to match files with valid extensions
     patterns = []
-    for ext in valid_extensions:
-        pattern_glob = tf.strings.join(
-            [dir_path, "*.{}".format(ext)]
-        )  # define pattern to match files with valid extensions
+    for ext in VALID_IMAGE_EXTENTIONS:
+        pattern_glob = tf.strings.join([dir_path, "*.{}".format(ext)])
         patterns.append(pattern_glob)
-    files = tf.io.matching_files(
-        pattern=patterns
-    )  # get list of files matching the patterns
+
+    # get list of files matching the patterns
+    files = tf.io.matching_files(pattern=patterns)
 
     return files
+
+
+@tf.function
+def match_img_files_triplet(dir_path):
+    """
+    Matches all .jpg, .png, .bmp and .gif files in a triplet directory.
+
+    :param dir_path: Path to directory containing anchor, positive and negative subfolders
+    :return: Tuple of 1-D Tensors containing file paths of achors, positives and negatives
+    """
+    dir_path = validate_dir_path(dir_path)
+
+    anchor_files = match_img_files(tf.strings.join([dir_path, "anchor"]))
+    positive_files = match_img_files(tf.strings.join([dir_path, "positive"]))
+    negative_files = match_img_files(tf.strings.join([dir_path, "negative"]))
+    return anchor_files, positive_files, negative_files
 
 
 def read_and_decode_image(file, channels=3):

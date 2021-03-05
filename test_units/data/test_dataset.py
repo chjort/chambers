@@ -3,7 +3,9 @@ import os
 import pytest
 import tensorflow as tf
 
-from chambers.data.dataset import InterleaveImageDataset, _block_iter
+from chambers.augmentations.single_image_augmentations import resize
+from chambers.data.dataset import InterleaveImageClassDataset, _block_iter, InterleaveImageTripletDataset, \
+    InterleaveImageClassTripletDataset
 from chambers.data.dataset import (
     _shuffle_repeat,
     _get_input_len,
@@ -11,6 +13,14 @@ from chambers.data.dataset import (
     set_n_parallel,
 )
 from chambers.data.load import match_nested_set, match_img_files
+
+
+def _get_dataset_labels(dataset, is_batched=False):
+    if is_batched:
+        labels = [y for xb, yb in dataset.as_numpy_iterator() for y in yb]
+    else:
+        labels = [y for x, y in dataset.as_numpy_iterator()]
+    return labels
 
 
 class TestGetInputLen:
@@ -30,17 +40,19 @@ class TestGetInputLen:
             input_len = _get_input_len(inputs)
 
 
-class TestDataset(tf.test.TestCase):
-    nested_data_path = "test_units/sample_data/mnist/train"
-    class_dirs = sorted(match_nested_set(nested_data_path))
+class TestImageClassDataset(tf.test.TestCase):
+    data_path = "test_units/sample_data/mnist/train"
+    class_dirs = sorted(match_nested_set(data_path))
     labels = list(range(len(class_dirs)))
+    nc = 5
+    nb = 2
 
     def test_set_n_parallel0(self):
-        td = InterleaveImageDataset(
+        td = InterleaveImageClassDataset(
             class_dirs=self.class_dirs,
             labels=self.labels,
-            class_cycle_length=5,
-            images_per_block=2,
+            class_cycle_length=self.nc,
+            images_per_block=self.nb,
             image_channels=3,
             block_bound=True,
             sample_block_random=True,
@@ -55,11 +67,11 @@ class TestDataset(tf.test.TestCase):
     def test_set_n_parallel1(self):
         set_n_parallel(3)
 
-        td = InterleaveImageDataset(
+        td = InterleaveImageClassDataset(
             class_dirs=self.class_dirs,
             labels=self.labels,
-            class_cycle_length=5,
-            images_per_block=2,
+            class_cycle_length=self.nc,
+            images_per_block=self.nb,
             image_channels=3,
             block_bound=True,
             sample_block_random=True,
@@ -70,6 +82,265 @@ class TestDataset(tf.test.TestCase):
             repeats=None,
         )
         self.assertAllEqual(td._num_parallel_calls, 3)
+
+    def test_block_bound0(self):
+        td = InterleaveImageClassDataset(
+            class_dirs=self.class_dirs,
+            labels=self.labels,
+            class_cycle_length=self.nc,
+            images_per_block=self.nb,
+            image_channels=3,
+            block_bound=True,
+            sample_block_random=False,
+            shuffle=False,
+            reshuffle_iteration=False,
+            buffer_size=1024,
+            seed=None,
+            repeats=None,
+        )
+        element_labels = [0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9]
+        non_batched_labels = _get_dataset_labels(td, is_batched=False)
+        batched_labels = _get_dataset_labels(
+            td.batch(self.nc * self.nb), is_batched=True
+        )
+        self.assertEqual(non_batched_labels, element_labels)
+        self.assertEqual(batched_labels, element_labels)
+
+    def test_block_bound1(self):
+        td = InterleaveImageClassDataset(
+            class_dirs=self.class_dirs,
+            labels=self.labels,
+            class_cycle_length=self.nc,
+            images_per_block=self.nb,
+            image_channels=3,
+            block_bound=False,
+            sample_block_random=False,
+            shuffle=False,
+            reshuffle_iteration=False,
+            buffer_size=1024,
+            seed=None,
+            repeats=None,
+        )
+        element_labels = [0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 0, 1, 2, 3, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 5, 6, 7, 8, 9]
+        non_batched_labels = _get_dataset_labels(td, is_batched=False)
+        batched_labels = _get_dataset_labels(
+            td.batch(self.nc * self.nb), is_batched=True
+        )
+        self.assertEqual(non_batched_labels, element_labels)
+        self.assertEqual(batched_labels, element_labels)
+
+    def test_random0(self):
+        td = InterleaveImageClassDataset(
+            class_dirs=self.class_dirs,
+            labels=self.labels,
+            class_cycle_length=self.nc,
+            images_per_block=self.nb,
+            image_channels=3,
+            block_bound=True,
+            sample_block_random=True,
+            shuffle=True,
+            reshuffle_iteration=False,
+            buffer_size=1024,
+            seed=42,
+            repeats=None,
+        )
+        element_labels = [2, 2, 0, 0, 7, 7, 8, 8, 9, 9, 3, 3, 6, 6, 4, 4, 1, 1, 5, 5]
+        non_batched_labels = _get_dataset_labels(td, is_batched=False)
+        batched_labels = _get_dataset_labels(
+            td.batch(self.nc * self.nb), is_batched=True
+        )
+        self.assertEqual(non_batched_labels, element_labels)
+        self.assertEqual(batched_labels, element_labels)
+
+
+class TestImageTripletDataset(tf.test.TestCase):
+    data_path = "test_units/sample_data/triplets/train"
+    class_dirs = sorted(match_nested_set(data_path))
+    labels = list(range(len(class_dirs)))
+    nc = 5
+    nb = 2
+
+    def test_block_bound0(self):
+        td = InterleaveImageTripletDataset(
+            class_dirs=self.class_dirs,
+            labels=self.labels,
+            class_cycle_length=self.nc,
+            images_per_block=self.nb,
+            image_channels=3,
+            block_bound=True,
+            sample_block_random=False,
+            shuffle=False,
+            reshuffle_iteration=False,
+            buffer_size=1024,
+            seed=None,
+            repeats=None,
+        )
+        td = td.map(lambda x, y: (resize(x, (224, 224)), y))
+
+        element_labels = [0, -1, 1, -1, 2, -1, 3, -1, 4, -1]
+        non_batched_labels = _get_dataset_labels(td, is_batched=False)
+        batched_labels = _get_dataset_labels(
+            td.batch(self.nc * self.nb), is_batched=True
+        )
+        self.assertEqual(non_batched_labels, element_labels)
+        self.assertEqual(batched_labels, element_labels)
+
+    def test_block_bound1(self):
+        td = InterleaveImageTripletDataset(
+            class_dirs=self.class_dirs,
+            labels=self.labels,
+            class_cycle_length=self.nc,
+            images_per_block=self.nb,
+            image_channels=3,
+            block_bound=False,
+            sample_block_random=False,
+            shuffle=False,
+            reshuffle_iteration=False,
+            buffer_size=1024,
+            seed=None,
+            repeats=None,
+        )
+        td = td.map(lambda x, y: (resize(x, (224, 224)), y))
+
+        element_labels = [0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 0, 0, -1, -1, 2, -1, 3, 3, 4, 4, -1, -1, -1, -1, 3, 3, -1, -1,
+                          -1, -1, -1, -1, 3, 3, -1, -1, -1, -1, -1, -1, 3, 3, -1, -1, -1, -1, 3, 3, -1, -1, 3, 3, -1,
+                          -1, 3, 3, -1, -1, 3, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+                          -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+                          -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+                          -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+                          -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+                          -1, -1, -1]
+        non_batched_labels = _get_dataset_labels(td, is_batched=False)
+        batched_labels = _get_dataset_labels(
+            td.batch(self.nc * self.nb), is_batched=True
+        )
+        self.assertEqual(non_batched_labels, element_labels)
+        self.assertEqual(batched_labels, element_labels)
+
+    def test_random0(self):
+        td = InterleaveImageTripletDataset(
+            class_dirs=self.class_dirs,
+            labels=self.labels,
+            class_cycle_length=self.nc,
+            images_per_block=self.nb,
+            image_channels=3,
+            block_bound=True,
+            sample_block_random=True,
+            shuffle=True,
+            reshuffle_iteration=False,
+            buffer_size=1024,
+            seed=42,
+            repeats=None,
+        )
+        td = td.map(lambda x, y: (resize(x, (224, 224)), y))
+
+        element_labels = [2, -1, 1, -1, 3, -1, 4, -1, 0, -1]
+        non_batched_labels = _get_dataset_labels(td, is_batched=False)
+        batched_labels = _get_dataset_labels(
+            td.batch(self.nc * self.nb), is_batched=True
+        )
+        self.assertEqual(non_batched_labels, element_labels)
+        self.assertEqual(batched_labels, element_labels)
+
+
+class TestInterleaveImageClassTripletDataset(tf.test.TestCase):
+    data_path = "test_units/sample_data/mnist/train"
+    class_dirs = sorted(match_nested_set(data_path))
+
+    triplet_data_path = "test_units/sample_data/triplets/train"
+    triplet_class_dirs = sorted(match_nested_set(triplet_data_path))
+    triplet_labels = list(range(len(triplet_class_dirs)))
+
+    class_dirs.extend(triplet_class_dirs)
+    labels = list(range(len(class_dirs)))
+
+    nc = 5
+    nb = 2
+
+    def test_block_bound0(self):
+        td = InterleaveImageClassTripletDataset(
+            class_dirs=self.class_dirs,
+            labels=self.labels,
+            class_cycle_length=self.nc,
+            images_per_block=self.nb,
+            image_channels=3,
+            block_bound=True,
+            sample_block_random=False,
+            shuffle=False,
+            reshuffle_iteration=False,
+            buffer_size=1024,
+            seed=None,
+            repeats=None,
+        )
+        td = td.map(lambda x, y: (resize(x, (224, 224)), y))
+
+        element_labels = [0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, -1, 11, -1, 12, -1, 13, -1,
+                          14, -1]
+        non_batched_labels = _get_dataset_labels(td, is_batched=False)
+        batched_labels = _get_dataset_labels(
+            td.batch(self.nc * self.nb), is_batched=True
+        )
+        self.assertEqual(non_batched_labels, element_labels)
+        self.assertEqual(batched_labels, element_labels)
+
+    def test_block_bound1(self):
+        td = InterleaveImageClassTripletDataset(
+            class_dirs=self.class_dirs,
+            labels=self.labels,
+            class_cycle_length=self.nc,
+            images_per_block=self.nb,
+            image_channels=3,
+            block_bound=False,
+            sample_block_random=False,
+            shuffle=False,
+            reshuffle_iteration=False,
+            buffer_size=1024,
+            seed=None,
+            repeats=None,
+        )
+        td = td.map(lambda x, y: (resize(x, (224, 224)), y))
+
+        element_labels = [0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 0, 1, 2, 3, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 5, 6, 7, 8, 9, 10,
+                          10, 11, 11, 12, 12, 13, 13, 14, 14, 10, 10, -1, -1, 12, -1, 13, 13, 14, 14, -1, -1, -1, -1,
+                          13, 13, -1, -1, -1, -1, -1, -1, 13, 13, -1, -1, -1, -1, -1, -1, 13, 13, -1, -1, -1, -1, 13,
+                          13, -1, -1, 13, 13, -1, -1, 13, 13, -1, -1, 13, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+                          -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+                          -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+                          -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+                          -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+                          -1, -1, -1, -1, -1, -1, -1, -1, -1, -1]
+        non_batched_labels = _get_dataset_labels(td, is_batched=False)
+        batched_labels = _get_dataset_labels(
+            td.batch(self.nc * self.nb), is_batched=True
+        )
+        self.assertEqual(non_batched_labels, element_labels)
+        self.assertEqual(batched_labels, element_labels)
+
+    def test_random0(self):
+        td = InterleaveImageClassTripletDataset(
+            class_dirs=self.class_dirs,
+            labels=self.labels,
+            class_cycle_length=self.nc,
+            images_per_block=self.nb,
+            image_channels=3,
+            block_bound=True,
+            sample_block_random=True,
+            shuffle=True,
+            reshuffle_iteration=False,
+            buffer_size=1024,
+            seed=42,
+            repeats=None,
+        )
+        td = td.map(lambda x, y: (resize(x, (224, 224)), y))
+
+        element_labels = [2, 2, 1, 1, 5, 5, 4, 4, 9, 9, 13, -1, 3, 3, 10, -1, 7, 7, 0, 0, 11, -1, 12, -1, 8, 8, 6, 6,
+                          14, -1]
+        non_batched_labels = _get_dataset_labels(td, is_batched=False)
+        batched_labels = _get_dataset_labels(
+            td.batch(self.nc * self.nb), is_batched=True
+        )
+        self.assertEqual(non_batched_labels, element_labels)
+        self.assertEqual(batched_labels, element_labels)
 
 
 class TestBlockIter(tf.test.TestCase):

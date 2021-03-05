@@ -3,7 +3,11 @@ from functools import partial
 import numpy as np
 import tensorflow as tf
 
-from chambers.data.load import match_img_files, read_and_decode_image
+from chambers.data.load import (
+    match_img_files,
+    read_and_decode_image,
+    match_img_files_triplet,
+)
 
 __CONFIG = {"N_PARALLEL": -1}
 
@@ -87,6 +91,7 @@ def _block_iter(
 ):
     n_files = tf.shape(block)[0]
 
+    block_length = tf.cast(block_length, n_files.dtype)
     if n_files < block_length:
         block = _random_upsample(block, block_length)
 
@@ -100,11 +105,48 @@ def _block_iter(
     block = tf.data.Dataset.from_tensor_slices((block, labels))
 
     if block_bound:
+        block_length = tf.cast(block_length, tf.int64)
         block = block.take(block_length)
-    return block
+
+    return block.repeat(1)
 
 
-def _interleave_image_files(
+def _block_iter_triplet(
+    triplets,
+    label,
+    block_length,
+    block_bound=True,
+    sample_block_random=False,
+    seed=None,
+):
+    anch, pos, neg = triplets
+    pos = tf.concat([anch, pos], axis=0)
+
+    n_pos_block = tf.cast(tf.math.floor(block_length / 2), tf.int32)
+    n_neg_block = tf.cast(tf.math.ceil(block_length / 2), tf.int32)
+
+    block_iter_pos = _block_iter(
+        pos,
+        label,
+        n_pos_block,
+        block_bound=block_bound,
+        sample_block_random=sample_block_random,
+        seed=seed,
+    )
+    block_iter_neg = _block_iter(
+        neg,
+        -1,
+        n_neg_block,
+        block_bound=block_bound,
+        sample_block_random=sample_block_random,
+        seed=seed,
+    )
+
+    block_iter = block_iter_pos.concatenate(block_iter_neg)
+    return block_iter.repeat(1)
+
+
+def _interleave_fn_image_files(
     input_dir,
     label,
     block_length,
@@ -112,15 +154,71 @@ def _interleave_image_files(
     sample_block_random=False,
     seed=None,
 ):
-    class_files = match_img_files(input_dir)
+    img_files = match_img_files(input_dir)
     block_iter = _block_iter(
-        class_files,
+        img_files,
         label,
         block_length=block_length,
         block_bound=block_bound,
         sample_block_random=sample_block_random,
         seed=seed,
     )
+    return block_iter
+
+
+def _interleave_fn_triplet_files(
+    input_dir,
+    label,
+    block_length,
+    block_bound=True,
+    sample_block_random=False,
+    seed=None,
+):
+    triplets = match_img_files_triplet(input_dir)
+    block_iter = _block_iter_triplet(
+        triplets,
+        label,
+        block_length=block_length,
+        block_bound=block_bound,
+        sample_block_random=sample_block_random,
+        seed=seed,
+    )
+    return block_iter
+
+
+@tf.function
+def _interleave_fn_image_triplet_files(
+    input_dir,
+    label,
+    block_length,
+    block_bound=True,
+    sample_block_random=False,
+    seed=None,
+):
+
+    img_files = match_img_files(input_dir)
+
+    # if no images found in folder, assume it is a triplet folder
+    if tf.shape(img_files)[0] == 0:
+        triplets = match_img_files_triplet(input_dir)
+        block_iter = _block_iter_triplet(
+            triplets,
+            label,
+            block_length=block_length,
+            block_bound=block_bound,
+            sample_block_random=sample_block_random,
+            seed=seed,
+        )
+    else:
+        block_iter = _block_iter(
+            img_files,
+            label,
+            block_length=block_length,
+            block_bound=block_bound,
+            sample_block_random=sample_block_random,
+            seed=seed,
+        )
+
     return block_iter
 
 
@@ -152,7 +250,7 @@ def _interleave_dataset(
     return td
 
 
-def InterleaveImageDataset(
+def InterleaveImageClassDataset(
     class_dirs: list,
     labels: list,
     class_cycle_length: int,
@@ -167,11 +265,97 @@ def InterleaveImageDataset(
     repeats=None,
 ) -> tf.data.Dataset:
     """
-    Constructs a tensorflow.data.Dataset which loads images by interleaving through input folders.
+    Constructs a tensorflow.data.Dataset which loads images by interleaving through class folders.
     """
 
     interleave_fn = partial(
-        _interleave_image_files,
+        _interleave_fn_image_files,
+        block_length=images_per_block,
+        block_bound=block_bound,
+        sample_block_random=sample_block_random,
+        seed=seed,
+    )
+    td = _interleave_dataset(
+        inputs=(class_dirs, labels),
+        interleave_fn=interleave_fn,
+        cycle_length=class_cycle_length,
+        block_length=images_per_block,
+        shuffle=shuffle,
+        reshuffle_iteration=reshuffle_iteration,
+        buffer_size=buffer_size,
+        seed=seed,
+        repeats=repeats,
+    )
+    td = td.map(
+        lambda x, y: (read_and_decode_image(x, channels=image_channels), y),
+        num_parallel_calls=__CONFIG["N_PARALLEL"],
+    )
+    return td
+
+
+def InterleaveImageTripletDataset(
+    class_dirs: list,
+    labels: list,
+    class_cycle_length: int,
+    images_per_block: int,
+    image_channels=3,
+    block_bound=True,
+    sample_block_random=False,
+    shuffle=False,
+    reshuffle_iteration=True,
+    buffer_size=None,
+    seed=None,
+    repeats=None,
+) -> tf.data.Dataset:
+    """
+    Constructs a tensorflow.data.Dataset which loads images by interleaving through triplet folders.
+    """
+
+    interleave_fn = partial(
+        _interleave_fn_triplet_files,
+        block_length=images_per_block,
+        block_bound=block_bound,
+        sample_block_random=sample_block_random,
+        seed=seed,
+    )
+    td = _interleave_dataset(
+        inputs=(class_dirs, labels),
+        interleave_fn=interleave_fn,
+        cycle_length=class_cycle_length,
+        block_length=images_per_block,
+        shuffle=shuffle,
+        reshuffle_iteration=reshuffle_iteration,
+        buffer_size=buffer_size,
+        seed=seed,
+        repeats=repeats,
+    )
+    td = td.map(
+        lambda x, y: (read_and_decode_image(x, channels=image_channels), y),
+        num_parallel_calls=__CONFIG["N_PARALLEL"],
+    )
+    return td
+
+
+def InterleaveImageClassTripletDataset(
+    class_dirs: list,
+    labels: list,
+    class_cycle_length: int,
+    images_per_block: int,
+    image_channels=3,
+    block_bound=True,
+    sample_block_random=False,
+    shuffle=False,
+    reshuffle_iteration=True,
+    buffer_size=None,
+    seed=None,
+    repeats=None,
+) -> tf.data.Dataset:
+    """
+    Constructs a tensorflow.data.Dataset which loads images by interleaving through class folders and triplet folders.
+    """
+
+    interleave_fn = partial(
+        _interleave_fn_image_triplet_files,
         block_length=images_per_block,
         block_bound=block_bound,
         sample_block_random=sample_block_random,

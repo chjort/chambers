@@ -3,7 +3,7 @@ import tensorflow as tf
 from tensorflow.python.framework.errors_impl import InvalidArgumentError
 
 from chambers.data.dataset import InterleaveImageDataset
-from chambers.data.read import read_nested_set
+from chambers.data.load import match_nested_set
 from chambers.data.tf_record import serialize_example, make_dataset_deserialize_fn
 
 
@@ -16,7 +16,7 @@ def random_size(x, y):
 
 class TestTFRecord(tf.test.TestCase):
     nested_data_path = "test_units/sample_data/mnist/train"
-    class_dirs = sorted(read_nested_set(nested_data_path))
+    class_dirs = sorted(match_nested_set(nested_data_path))
     labels = list(range(len(class_dirs)))
 
     td = InterleaveImageDataset(

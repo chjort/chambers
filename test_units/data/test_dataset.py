@@ -10,7 +10,7 @@ from chambers.data.dataset import (
     _random_upsample,
     set_n_parallel,
 )
-from chambers.data.read import read_nested_set, read_img_files
+from chambers.data.load import match_nested_set, match_img_files
 
 
 class TestGetInputLen:
@@ -32,7 +32,7 @@ class TestGetInputLen:
 
 class TestDataset(tf.test.TestCase):
     nested_data_path = "test_units/sample_data/mnist/train"
-    class_dirs = sorted(read_nested_set(nested_data_path))
+    class_dirs = sorted(match_nested_set(nested_data_path))
     labels = list(range(len(class_dirs)))
 
     def test_set_n_parallel0(self):
@@ -87,7 +87,7 @@ class TestBlockIter(tf.test.TestCase):
         self.assertAllEqual(upsampled, self.slices)
 
     def test_block_iter0(self):
-        files = read_img_files(self.class_dir)
+        files = match_img_files(self.class_dir)
 
         block_iter = _block_iter(
             block=files,
@@ -104,7 +104,7 @@ class TestBlockIter(tf.test.TestCase):
         self.assertEqual(block_list, files_list)
 
     def test_block_iter1(self):
-        files = read_img_files(self.class_dir)
+        files = match_img_files(self.class_dir)
 
         block_len = 2
 
@@ -123,7 +123,7 @@ class TestBlockIter(tf.test.TestCase):
         self.assertEqual(block_list, files_list)
 
     def test_block_iter2(self):
-        files = read_img_files(self.class_dir)
+        files = match_img_files(self.class_dir)
 
         block_iter = _block_iter(
             block=files,
@@ -140,7 +140,7 @@ class TestBlockIter(tf.test.TestCase):
         self.assertNotEqual(block_list, files_list)
 
     def test_block_iter3(self):
-        files = read_img_files(self.class_dir)
+        files = match_img_files(self.class_dir)
 
         block_len = 2
 

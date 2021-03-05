@@ -3,7 +3,7 @@ from functools import partial
 import numpy as np
 import tensorflow as tf
 
-from chambers.data.read import read_img_files, read_and_decode_image
+from chambers.data.load import match_img_files, read_and_decode_image
 
 __CONFIG = {"N_PARALLEL": -1}
 
@@ -112,7 +112,7 @@ def _interleave_image_files(
     sample_block_random=False,
     seed=None,
 ):
-    class_files = read_img_files(input_dir)
+    class_files = match_img_files(input_dir)
     block_iter = _block_iter(
         class_files,
         label,
@@ -219,7 +219,7 @@ def SequentialImageDataset(
     )
 
     def flat_map_fn(input_dir, label):
-        files = read_img_files(input_dir)
+        files = match_img_files(input_dir)
         n_files = tf.shape(files)[0]
         y = tf.tile([label], [n_files])
         return tf.data.Dataset.from_tensor_slices((files, y))

@@ -4,18 +4,20 @@ import os
 import tensorflow as tf
 
 
-def read_nested_set(path):
+def match_nested_set(path):
     return glob.glob(os.path.join(path, "*/"))
 
 
 @tf.function
-def read_img_files(dir_path):
+def match_img_files(dir_path):
     """
     Matches all .jpg, .png, .bmp and .gif files in a directory.
 
     :param dir_path: Path to directory containing files
     :return: 1-D Tensor containing file paths of matched files
     """
+
+    # add "/" to dir_path if it does not already end with "/"
     if tf.strings.substr(dir_path, -1, 1) != "/":
         dir_path = tf.strings.join([dir_path, "/"])
 

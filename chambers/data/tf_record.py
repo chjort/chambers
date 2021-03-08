@@ -74,12 +74,12 @@ def _serialize_example(*args):
     return example
 
 
-def serialize_example(*args):
+def serialize_to_example(*args):
     example = tf.py_function(_serialize_example, args, tf.string)
     return tf.reshape(example, [])
 
 
-def _make_feature_deserialize_fn(feature, set_shape=False, set_size=False):
+def _make_feature_deserialize_fn(feature, set_shape=False, set_dimension=False):
     description = _make_description(feature)
     tensor_ids = _get_tensor_ids(feature)
     dtypes = [
@@ -87,7 +87,7 @@ def _make_feature_deserialize_fn(feature, set_shape=False, set_size=False):
     ]
     if set_shape:
         shapes = [feature[tn + "_shape"].int64_list.value for tn in tensor_ids]
-    elif set_size:
+    elif set_dimension:
         shapes = [
             [None] * len(feature[tn + "_shape"].int64_list.value) for tn in tensor_ids
         ]
@@ -102,7 +102,7 @@ def _make_feature_deserialize_fn(feature, set_shape=False, set_size=False):
             t = tensor_example[name]
             t = tf.io.parse_tensor(t, out_type=dtype)
 
-            if set_shape or set_size:
+            if set_shape or set_dimension:
                 shape = shapes[i]
                 t.set_shape(shape)
 
@@ -118,22 +118,22 @@ def _make_feature_deserialize_fn(feature, set_shape=False, set_size=False):
     return deserialize_fn
 
 
-def make_dataset_deserialize_fn(dataset, set_shape=False, set_size=False) -> callable:
+def make_dataset_deserialize_fn(dataset, set_shape=False, set_dimension=False) -> callable:
     sample = next(iter(dataset))
 
     example_features = tf.train.Example.FromString(sample.numpy())
     feature = example_features.features.feature
-    return _make_feature_deserialize_fn(feature, set_shape=set_shape, set_size=set_size)
+    return _make_feature_deserialize_fn(feature, set_shape=set_shape, set_dimension=set_dimension)
 
 
 def dataset_to_tfrecord(dataset, path):
-    dataset = dataset.map(serialize_example)
+    dataset = dataset.map(serialize_to_example)
 
     writer = tf.data.experimental.TFRecordWriter(path)
     writer.write(dataset)
 
 
-def tfrecord_to_dataset(paths, set_shape=True, set_size=False) -> tf.data.Dataset:
+def tfrecord_to_dataset(paths, set_shape=True, set_dimension=False) -> tf.data.Dataset:
     td = tf.data.TFRecordDataset(paths)
-    td = td.map(make_dataset_deserialize_fn(td, set_shape=set_shape, set_size=set_size))
+    td = td.map(make_dataset_deserialize_fn(td, set_shape=set_shape, set_dimension=set_dimension))
     return td

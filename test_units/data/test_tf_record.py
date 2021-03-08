@@ -4,7 +4,7 @@ from tensorflow.python.framework.errors_impl import InvalidArgumentError
 
 from chambers.data.dataset import InterleaveImageClassDataset
 from chambers.data.load import match_nested_set
-from chambers.data.tf_record import serialize_example, make_dataset_deserialize_fn
+from chambers.data.tf_record import serialize_to_example, make_dataset_deserialize_fn
 
 
 def random_size(x, y):
@@ -25,12 +25,12 @@ class TestTFRecord(tf.test.TestCase):
         class_cycle_length=5,
         images_per_block=2,
         image_channels=3,
-        block_bound=True,
-        sample_block_random=True,
-        shuffle=True,
+        block_bound=False,
+        sample_block_random=False,
+        shuffle=False,
         reshuffle_iteration=False,
         buffer_size=1024,
-        seed=42,
+        seed=None,
         repeats=None,
     )
 
@@ -38,7 +38,7 @@ class TestTFRecord(tf.test.TestCase):
         td = self.td
         batch = next(iter(td))
 
-        td = td.map(serialize_example)
+        td = td.map(serialize_to_example)
         td = td.map(make_dataset_deserialize_fn(td))
 
         batch_d = next(iter(td))
@@ -50,7 +50,7 @@ class TestTFRecord(tf.test.TestCase):
         td = td.map(lambda x, y: (x, tf.cast(x, tf.float32), y))
         batch = next(iter(td))
 
-        td = td.map(serialize_example)
+        td = td.map(serialize_to_example)
         td = td.map(make_dataset_deserialize_fn(td))
 
         batch_d = next(iter(td))
@@ -64,7 +64,7 @@ class TestTFRecord(tf.test.TestCase):
         td = td.map(lambda x, y: x)
         batch = next(iter(td))
 
-        td = td.map(serialize_example)
+        td = td.map(serialize_to_example)
         td = td.map(make_dataset_deserialize_fn(td))
 
         batch_d = next(iter(td))
@@ -74,8 +74,8 @@ class TestTFRecord(tf.test.TestCase):
         td = self.td
         batch = next(iter(td))
 
-        td = td.map(serialize_example)
-        td = td.map(make_dataset_deserialize_fn(td, set_shape=False, set_size=False))
+        td = td.map(serialize_to_example)
+        td = td.map(make_dataset_deserialize_fn(td, set_shape=False, set_dimension=False))
 
         self.assertEqual(td.element_spec[0], tf.TensorSpec(shape=None, dtype=tf.uint8))
         self.assertEqual(
@@ -90,8 +90,8 @@ class TestTFRecord(tf.test.TestCase):
         td = self.td
         batch = next(iter(td))
 
-        td = td.map(serialize_example)
-        td = td.map(make_dataset_deserialize_fn(td, set_shape=False, set_size=True))
+        td = td.map(serialize_to_example)
+        td = td.map(make_dataset_deserialize_fn(td, set_shape=False, set_dimension=True))
 
         self.assertEqual(
             td.element_spec[0], tf.TensorSpec(shape=(None, None, None), dtype=tf.uint8)
@@ -108,8 +108,8 @@ class TestTFRecord(tf.test.TestCase):
         td = self.td
         batch = next(iter(td))
 
-        td = td.map(serialize_example)
-        td = td.map(make_dataset_deserialize_fn(td, set_shape=True, set_size=False))
+        td = td.map(serialize_to_example)
+        td = td.map(make_dataset_deserialize_fn(td, set_shape=True, set_dimension=False))
 
         self.assertEqual(
             td.element_spec[0], tf.TensorSpec(shape=(28, 28, 3), dtype=tf.uint8)
@@ -126,8 +126,8 @@ class TestTFRecord(tf.test.TestCase):
         td = self.td
         batch = next(iter(td))
 
-        td = td.map(serialize_example)
-        td = td.map(make_dataset_deserialize_fn(td, set_shape=True, set_size=True))
+        td = td.map(serialize_to_example)
+        td = td.map(make_dataset_deserialize_fn(td, set_shape=True, set_dimension=True))
 
         self.assertEqual(
             td.element_spec[0], tf.TensorSpec(shape=(28, 28, 3), dtype=tf.uint8)
@@ -145,8 +145,8 @@ class TestTFRecord(tf.test.TestCase):
         td = td.map(random_size)
         batch = next(iter(td))
 
-        td = td.map(serialize_example)
-        td = td.map(make_dataset_deserialize_fn(td, set_shape=False, set_size=False))
+        td = td.map(serialize_to_example)
+        td = td.map(make_dataset_deserialize_fn(td, set_shape=False, set_dimension=False))
 
         self.assertEqual(
             td.element_spec[0], tf.TensorSpec(shape=None, dtype=tf.float32)
@@ -164,8 +164,8 @@ class TestTFRecord(tf.test.TestCase):
         td = td.map(random_size)
         batch = next(iter(td))
 
-        td = td.map(serialize_example)
-        td = td.map(make_dataset_deserialize_fn(td, set_shape=False, set_size=True))
+        td = td.map(serialize_to_example)
+        td = td.map(make_dataset_deserialize_fn(td, set_shape=False, set_dimension=True))
 
         self.assertEqual(
             td.element_spec[0],
@@ -189,8 +189,8 @@ class TestTFRecord(tf.test.TestCase):
         td_v = tf.data.Dataset.from_tensors((s0, s1))
         td = td_v.concatenate(td)
 
-        td = td.map(serialize_example)
-        td = td.map(make_dataset_deserialize_fn(td, set_shape=True, set_size=False))
+        td = td.map(serialize_to_example)
+        td = td.map(make_dataset_deserialize_fn(td, set_shape=True, set_dimension=False))
 
         it = iter(td)
         x, y = next(it)

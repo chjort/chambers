@@ -3,7 +3,7 @@ from functools import partial
 import numpy as np
 import tensorflow as tf
 
-from chambers.data.load import (
+from chambers.data.io import (
     match_img_files,
     read_and_decode_image,
     match_img_files_triplet,

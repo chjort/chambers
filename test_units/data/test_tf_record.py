@@ -3,7 +3,7 @@ import tensorflow as tf
 from tensorflow.python.framework.errors_impl import InvalidArgumentError
 
 from chambers.data.dataset import InterleaveImageClassDataset
-from chambers.data.load import match_nested_set
+from chambers.data.io import match_nested_set
 from chambers.data.tf_record import serialize_to_example, make_dataset_deserialize_fn
 
 

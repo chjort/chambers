@@ -12,7 +12,7 @@ from chambers.data.dataset import (
     _random_upsample,
     set_n_parallel,
 )
-from chambers.data.load import match_nested_set, match_img_files
+from chambers.data.io import match_nested_set, match_img_files
 
 
 def _get_dataset_labels(dataset, is_batched=False):

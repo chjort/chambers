@@ -2,7 +2,7 @@ import os
 
 import tensorflow as tf
 
-from chambers.data.load import match_nested_set, match_img_files, read_and_decode_image
+from chambers.data.io import match_nested_set, match_img_files, read_and_decode_image
 
 nested_data_path = "test_units/sample_data/mnist/train"
 img_folder = os.path.join(nested_data_path, "1")

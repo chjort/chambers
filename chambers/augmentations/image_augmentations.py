@@ -13,9 +13,9 @@ class ImageNetNormalization(preprocessing.PreprocessingLayer):
 
     def call(self, inputs, **kwargs):
         if self.mode == "tf":
-            return self._torch_normalize(inputs)
-        elif self.mode == "torch":
             return self._tf_normalize(inputs)
+        elif self.mode == "torch":
+            return self._torch_normalize(inputs)
         else:
             return self._caffe_normalize(inputs)
 
@@ -35,6 +35,8 @@ class ImageNetNormalization(preprocessing.PreprocessingLayer):
         return x
 
     def _torch_normalize(self, x):
+        x = tf.cast(x, tf.float32)
+
         x = x / 255.0
         x = self._normalize(x, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         return x

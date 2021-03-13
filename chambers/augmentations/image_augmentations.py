@@ -1,6 +1,11 @@
 import tensorflow as tf
 from tensorflow.keras.layers.experimental import preprocessing
 from tensorflow.python.keras.engine.input_spec import InputSpec
+from chambers.augmentations.augment_schemes import (
+    distort_image_with_autoaugment,
+    distort_image_with_randaugment,
+)
+from chambers.augmentations.rand_aug import rand_augment
 
 
 class ImageNetNormalization(preprocessing.PreprocessingLayer):
@@ -130,3 +135,48 @@ class ResizingMinMax(preprocessing.PreprocessingLayer):
         }
         base_config = super(ResizingMinMax, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
+
+
+class AutoAugment(preprocessing.PreprocessingLayer):
+    def __init__(self, name=None, **kwargs):
+        super(AutoAugment, self).__init__(name=name, **kwargs)
+        self.input_spec = InputSpec(ndim=4)
+
+    def call(self, inputs, **kwargs):
+        fn = lambda x: distort_image_with_autoaugment(x, augmentation_name="v0")
+        return tf.map_fn(fn, inputs)
+
+    def compute_output_shape(self, input_shape):
+        return input_shape
+
+
+class RandAugment(preprocessing.PreprocessingLayer):
+    def __init__(self, num_layers, magnitude, name=None, **kwargs):
+        super(RandAugment, self).__init__(name=name, **kwargs)
+        self.num_layers = num_layers
+        self.magnitude = magnitude
+        self.input_spec = InputSpec(ndim=4)
+
+    def call(self, inputs, **kwargs):
+        fn = lambda x: distort_image_with_randaugment(
+            x, num_layers=self.num_layers, magnitude=self.magnitude
+        )
+        return tf.map_fn(fn, inputs)
+
+    def compute_output_shape(self, input_shape):
+        return input_shape
+
+
+class RandAugmentCH(preprocessing.PreprocessingLayer):
+    def __init__(self, num_layers, magnitude, name=None, **kwargs):
+        super(RandAugmentCH, self).__init__(name=name, **kwargs)
+        self.num_layers = num_layers
+        self.magnitude = magnitude
+        self.input_spec = InputSpec(ndim=4)
+
+    def call(self, inputs, **kwargs):
+        fn = lambda x: rand_augment(x, n=self.num_layers, magnitude=self.magnitude)
+        return tf.map_fn(fn, inputs)
+
+    def compute_output_shape(self, input_shape):
+        return input_shape

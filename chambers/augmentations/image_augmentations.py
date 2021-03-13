@@ -158,23 +158,6 @@ class RandAugment(preprocessing.PreprocessingLayer):
         self.input_spec = InputSpec(ndim=4)
 
     def call(self, inputs, **kwargs):
-        fn = lambda x: distort_image_with_randaugment(
-            x, num_layers=self.num_layers, magnitude=self.magnitude
-        )
-        return tf.map_fn(fn, inputs)
-
-    def compute_output_shape(self, input_shape):
-        return input_shape
-
-
-class RandAugmentCH(preprocessing.PreprocessingLayer):
-    def __init__(self, num_layers, magnitude, name=None, **kwargs):
-        super(RandAugmentCH, self).__init__(name=name, **kwargs)
-        self.num_layers = num_layers
-        self.magnitude = magnitude
-        self.input_spec = InputSpec(ndim=4)
-
-    def call(self, inputs, **kwargs):
         fn = lambda x: rand_augment(x, n=self.num_layers, magnitude=self.magnitude)
         return tf.map_fn(fn, inputs)
 

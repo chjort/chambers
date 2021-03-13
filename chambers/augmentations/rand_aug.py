@@ -62,7 +62,6 @@ def with_wrapping(fn, replace_value):
     return wrapped_fn
 
 
-
 def blend(image1, image2, factor):
     """Blend image1 and image2 using 'factor'.
 
@@ -194,8 +193,7 @@ def invert(image):
 
 
 # TODO: Existing keras layer?
-# pass wrapped image
-def rotate(image, degrees, replace):
+def rotate(image, degrees):
     """Rotates the image by degrees either clockwise or counterclockwise.
 
     Args:
@@ -216,31 +214,7 @@ def rotate(image, degrees, replace):
     # In practice, we should randomize the rotation degrees by flipping
     # it negatively half the time, but that's done on 'degrees' outside
     # of the function.
-    image = tfa.image.rotate(wrap(image), radians)
-    return unwrap(image, replace)
-
-# def rotate(image, degrees, replace):
-#     """Rotates the image by degrees either clockwise or counterclockwise.
-#
-#     Args:
-#       image: An image Tensor of type uint8.
-#       degrees: Float, a scalar angle in degrees to rotate all images by. If
-#         degrees is positive the image will be rotated clockwise otherwise it will
-#         be rotated counterclockwise.
-#       replace: A one or three value 1D tensor to fill empty pixels caused by
-#         the rotate operation.
-#
-#     Returns:
-#       The rotated version of image.
-#     """
-#     # Convert from degrees to radians.
-#     degrees_to_radians = math.pi / 180.0
-#     radians = degrees * degrees_to_radians
-#
-#     # In practice, we should randomize the rotation degrees by flipping
-#     # it negatively half the time, but that's done on 'degrees' outside
-#     # of the function.
-#     return tfa.image.rotate(image, radians)
+    return tfa.image.rotate(image, radians)
 
 
 def posterize(image, bits):
@@ -330,72 +304,37 @@ def sharpness(image, factor):
     return blend(result, orig_image, factor)
 
 
-# pass wrapped image
-def shear_x(image, level, replace):
+def shear_x(image, level):
     """Equivalent of PIL Shearing in X dimension."""
     # Shear parallel to x axis is a projective transform
     # with a matrix form of:
     # [1  level
     #  0  1].
-    image = tfa.image.transform(wrap(image), [1.0, level, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0])
-    return unwrap(image, replace)
+    return tfa.image.transform(image, [1.0, level, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0])
+
 
 # pass wrapped image
-def shear_y(image, level, replace):
+def shear_y(image, level):
     """Equivalent of PIL Shearing in Y dimension."""
     # Shear parallel to y axis is a projective transform
     # with a matrix form of:
     # [1  0
     #  level  1].
-    image = tfa.image.transform(wrap(image), [1.0, 0.0, 0.0, level, 1.0, 0.0, 0.0, 0.0])
-    return unwrap(image, replace)
+    return tfa.image.transform(image, [1.0, 0.0, 0.0, level, 1.0, 0.0, 0.0, 0.0])
 
 
 # TODO: Existing keras layer?
 # pass wrapped image
-def translate_x(image, pixels, replace):
+def translate_x(image, pixels):
     """Equivalent of PIL Translate in X dimension."""
-    image = tfa.image.translate(wrap(image), [-pixels, 0])
-    return unwrap(image, replace)
+    return tfa.image.translate(image, [-pixels, 0])
+
 
 # TODO: Existing keras layer?
 # pass wrapped image
-def translate_y(image, pixels, replace):
+def translate_y(image, pixels):
     """Equivalent of PIL Translate in Y dimension."""
-    image = tfa.image.translate(wrap(image), [0, -pixels])
-    return unwrap(image, replace)
-#
-# def shear_x(image, level, replace):
-#     """Equivalent of PIL Shearing in X dimension."""
-#     # Shear parallel to x axis is a projective transform
-#     # with a matrix form of:
-#     # [1  level
-#     #  0  1].
-#     return tfa.image.transform(image, [1.0, level, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0])
-#
-#
-# # pass wrapped image
-# def shear_y(image, level, replace):
-#     """Equivalent of PIL Shearing in Y dimension."""
-#     # Shear parallel to y axis is a projective transform
-#     # with a matrix form of:
-#     # [1  0
-#     #  level  1].
-#     return tfa.image.transform(image, [1.0, 0.0, 0.0, level, 1.0, 0.0, 0.0, 0.0])
-#
-#
-# # TODO: Existing keras layer?
-# # pass wrapped image
-# def translate_x(image, pixels, replace):
-#     """Equivalent of PIL Translate in X dimension."""
-#     return tfa.image.translate(image, [-pixels, 0])
-#
-#
-# # TODO: Existing keras layer?
-# # pass wrapped image
-# def translate_y(image, pixels, replace):
-#     """Equivalent of PIL Translate in Y dimension."""
-#     return tfa.image.translate(image, [0, -pixels])
+    return tfa.image.translate(image, [0, -pixels])
 
 
 def cutout(image, pad_size, replace_value=0):
@@ -476,11 +415,7 @@ def get_transform(magnitude, transform_name):
         "Invert": {},
         "Rotate": {
             "degrees": _randomly_negate_value(magnitude_ratio * 30.0),
-            "replace": replace_value,
         },
-        # "Rotate": {
-        #     "degrees": _randomly_negate_value(magnitude_ratio * 30.0),
-        # },
         "Posterize": {"bits": int(magnitude_ratio * 4)},
         "Solarize": {"threshold": int(magnitude_ratio * 256)},
         "SolarizeAdd": {"addition": int(magnitude_ratio * 110)},
@@ -490,32 +425,16 @@ def get_transform(magnitude, transform_name):
         "Sharpness": {"factor": enhance_factor},
         "ShearX": {
             "level": _randomly_negate_value(shear_level),
-            "replace": replace_value,
         },
         "ShearY": {
             "level": _randomly_negate_value(shear_level),
-            "replace": replace_value,
         },
         "TranslateX": {
             "pixels": _randomly_negate_value(translate_pixels),
-            "replace": replace_value,
         },
         "TranslateY": {
             "pixels": _randomly_negate_value(translate_pixels),
-            "replace": replace_value,
         },
-        # "ShearX": {
-        #     "level": _randomly_negate_value(shear_level),
-        # },
-        # "ShearY": {
-        #     "level": _randomly_negate_value(shear_level),
-        # },
-        # "TranslateX": {
-        #     "pixels": _randomly_negate_value(translate_pixels),
-        # },
-        # "TranslateY": {
-        #     "pixels": _randomly_negate_value(translate_pixels),
-        # },
         "Cutout": {
             "pad_size": int(magnitude_ratio * cutout_const),
             "replace_value": replace_value,
@@ -526,7 +445,7 @@ def get_transform(magnitude, transform_name):
         "AutoContrast": autocontrast,
         "Equalize": equalize,
         "Invert": invert,
-        "Rotate": rotate,
+        "Rotate": with_wrapping(rotate, replace_value),
         "Posterize": posterize,
         "Solarize": solarize,
         "SolarizeAdd": solarize_add,
@@ -534,10 +453,10 @@ def get_transform(magnitude, transform_name):
         "Contrast": contrast,
         "Brightness": brightness,
         "Sharpness": sharpness,
-        "ShearX": shear_x,
-        "ShearY": shear_y,
-        "TranslateX": translate_x,
-        "TranslateY": translate_y,
+        "ShearX": with_wrapping(shear_x, replace_value),
+        "ShearY": with_wrapping(shear_y, replace_value),
+        "TranslateX": with_wrapping(translate_x, replace_value),
+        "TranslateY": with_wrapping(translate_y, replace_value),
         "Cutout": cutout,
     }
 

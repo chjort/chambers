@@ -11,4 +11,4 @@ from tensorflow.keras.layers.experimental.preprocessing import (
     Resizing,
     CenterCrop,
 )
-from .image_augmentations import ImageNetNormalization, ResizingMinMax, AutoAugment, RandAugment, RandAugmentCH
+from .image_augmentations import ImageNetNormalization, ResizingMinMax, AutoAugment, RandAugment

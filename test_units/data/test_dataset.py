@@ -3,7 +3,7 @@ import os
 import pytest
 import tensorflow as tf
 
-from chambers.augmentations.single_image_augmentations import resize
+from chambers.augmentations import Resizing
 from chambers.data.dataset import InterleaveImageClassDataset, _block_iter, InterleaveImageTripletDataset, \
     InterleaveImageClassTripletDataset
 from chambers.data.dataset import (
@@ -175,7 +175,7 @@ class TestImageTripletDataset(tf.test.TestCase):
             seed=None,
             repeats=None,
         )
-        td = td.map(lambda x, y: (resize(x, (224, 224)), y))
+        td = td.map(lambda x, y: (Resizing(224, 224)(x), y))
 
         element_labels = [0, -1, 1, -1, 2, -1, 3, -1, 4, -1]
         non_batched_labels = _get_dataset_labels(td, is_batched=False)
@@ -200,15 +200,9 @@ class TestImageTripletDataset(tf.test.TestCase):
             seed=None,
             repeats=None,
         )
-        td = td.map(lambda x, y: (resize(x, (224, 224)), y))
+        td = td.map(lambda x, y: (Resizing(224, 224)(x), y))
 
-        element_labels = [0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 0, 0, -1, -1, 2, -1, 3, 3, 4, 4, -1, -1, -1, -1, 3, 3, -1, -1,
-                          -1, -1, -1, -1, 3, 3, -1, -1, -1, -1, -1, -1, 3, 3, -1, -1, -1, -1, 3, 3, -1, -1, 3, 3, -1,
-                          -1, 3, 3, -1, -1, 3, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-                          -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-                          -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-                          -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-                          -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+        element_labels = [0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 0, 0, -1, -1, 2, -1, 3, 3, 4, 4, -1, -1, -1, -1, -1, -1, -1, -1,
                           -1, -1, -1]
         non_batched_labels = _get_dataset_labels(td, is_batched=False)
         batched_labels = _get_dataset_labels(
@@ -232,7 +226,7 @@ class TestImageTripletDataset(tf.test.TestCase):
             seed=42,
             repeats=None,
         )
-        td = td.map(lambda x, y: (resize(x, (224, 224)), y))
+        td = td.map(lambda x, y: (Resizing(224, 224)(x), y))
 
         element_labels = [2, -1, 1, -1, 3, -1, 4, -1, 0, -1]
         non_batched_labels = _get_dataset_labels(td, is_batched=False)
@@ -272,7 +266,7 @@ class TestInterleaveImageClassTripletDataset(tf.test.TestCase):
             seed=None,
             repeats=None,
         )
-        td = td.map(lambda x, y: (resize(x, (224, 224)), y))
+        td = td.map(lambda x, y: (Resizing(224, 224)(x), y))
 
         element_labels = [0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, -1, 11, -1, 12, -1, 13, -1,
                           14, -1]
@@ -298,17 +292,11 @@ class TestInterleaveImageClassTripletDataset(tf.test.TestCase):
             seed=None,
             repeats=None,
         )
-        td = td.map(lambda x, y: (resize(x, (224, 224)), y))
+        td = td.map(lambda x, y: (Resizing(224, 224)(x), y))
 
         element_labels = [0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 0, 1, 2, 3, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 5, 6, 7, 8, 9, 10,
                           10, 11, 11, 12, 12, 13, 13, 14, 14, 10, 10, -1, -1, 12, -1, 13, 13, 14, 14, -1, -1, -1, -1,
-                          13, 13, -1, -1, -1, -1, -1, -1, 13, 13, -1, -1, -1, -1, -1, -1, 13, 13, -1, -1, -1, -1, 13,
-                          13, -1, -1, 13, 13, -1, -1, 13, 13, -1, -1, 13, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-                          -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-                          -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-                          -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-                          -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-                          -1, -1, -1, -1, -1, -1, -1, -1, -1, -1]
+                          -1, -1, -1, -1, -1, -1, -1]
         non_batched_labels = _get_dataset_labels(td, is_batched=False)
         batched_labels = _get_dataset_labels(
             td.batch(self.nc * self.nb), is_batched=True
@@ -331,7 +319,7 @@ class TestInterleaveImageClassTripletDataset(tf.test.TestCase):
             seed=42,
             repeats=None,
         )
-        td = td.map(lambda x, y: (resize(x, (224, 224)), y))
+        td = td.map(lambda x, y: (Resizing(224, 224)(x), y))
 
         element_labels = [2, 2, 1, 1, 5, 5, 4, 4, 9, 9, 13, -1, 3, 3, 10, -1, 7, 7, 0, 0, 11, -1, 12, -1, 8, 8, 6, 6,
                           14, -1]

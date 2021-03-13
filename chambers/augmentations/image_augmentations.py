@@ -1,9 +1,9 @@
 import tensorflow as tf
 from tensorflow.keras.layers.experimental import preprocessing
 from tensorflow.python.keras.engine.input_spec import InputSpec
+
 from chambers.augmentations.augment_schemes import (
     distort_image_with_autoaugment,
-    distort_image_with_randaugment,
 )
 from chambers.augmentations.rand_aug import rand_augment
 

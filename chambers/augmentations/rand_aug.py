@@ -73,7 +73,6 @@ def autocontrast(images):
     scale = scale * mask + (1 - mask)
     offset = offset * mask
 
-    # if tf.equal(rank, 4):
     if rank == 4:
         scale = scale[:, None, None, :]
         offset = offset[:, None, None, :]

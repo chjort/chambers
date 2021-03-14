@@ -185,6 +185,7 @@ def contrast(image, factor):
     degenerate = tf.image.grayscale_to_rgb(tf.cast(degenerate, tf.uint8))
     return blend(degenerate, image, factor)
 
+
 # TODO: Pain
 def brightness(image, factor):
     """Equivalent of PIL Brightness."""
@@ -200,10 +201,6 @@ def sharpness(image, factor):
 # NOTE: Layer
 def shear_x(image, level):
     """Equivalent of PIL Shearing in X dimension."""
-    # Shear parallel to x axis is a projective transform
-    # with a matrix form of:
-    # [1  level
-    #  0  1].
     return tfa.image.transform(
         image,
         [1.0, level, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0],
@@ -216,10 +213,6 @@ def shear_x(image, level):
 # NOTE: Layer
 def shear_y(image, level):
     """Equivalent of PIL Shearing in Y dimension."""
-    # Shear parallel to y axis is a projective transform
-    # with a matrix form of:
-    # [1  0
-    #  level  1].
     return tfa.image.transform(
         image,
         [1.0, 0.0, 0.0, level, 1.0, 0.0, 0.0, 0.0],
@@ -253,55 +246,13 @@ def translate_y(image, pixels):
     )
 
 
-def cutout(image, pad_size, replace_value=0):
-    """Apply cutout (https://arxiv.org/abs/1708.04552) to image.
-
-    This operation applies a (2*pad_size x 2*pad_size) mask of zeros to
-    a random location within `img`. The pixel values filled in will be of the
-    value `replace`. The located where the mask will be applied is randomly
-    chosen uniformly over the whole image.
-
-    Args:
-      image: An image Tensor of type uint8.
-      pad_size: Specifies how big the zero mask that will be generated is that
-        is applied to the image. The mask will be of size
-        (2*pad_size x 2*pad_size).
-      replace_value: What pixel value to fill in the image in the area that has
-        the cutout mask applied to it.
-
-    Returns:
-      An image Tensor that is of type uint8.
-    """
-    image_height = tf.shape(image)[0]
-    image_width = tf.shape(image)[1]
-
-    # Sample the center location in the image where the zero mask will be applied.
-    cutout_center_height = tf.random.uniform(
-        shape=[], minval=0, maxval=image_height, dtype=tf.int32
+# NOTE: Layer
+def cutout(image, mask_size):
+    image = tfa.image.utils.to_4D_image(image)
+    image = tfa.image.random_cutout(
+        image, mask_size=mask_size, constant_values=_FILL_VALUE
     )
-
-    cutout_center_width = tf.random.uniform(
-        shape=[], minval=0, maxval=image_width, dtype=tf.int32
-    )
-
-    lower_pad = tf.maximum(0, cutout_center_height - pad_size)
-    upper_pad = tf.maximum(0, image_height - cutout_center_height - pad_size)
-    left_pad = tf.maximum(0, cutout_center_width - pad_size)
-    right_pad = tf.maximum(0, image_width - cutout_center_width - pad_size)
-
-    cutout_shape = [
-        image_height - (lower_pad + upper_pad),
-        image_width - (left_pad + right_pad),
-    ]
-    padding_dims = [[lower_pad, upper_pad], [left_pad, right_pad]]
-    mask = tf.pad(
-        tf.zeros(cutout_shape, dtype=image.dtype), padding_dims, constant_values=1
-    )
-    mask = tf.expand_dims(mask, -1)
-    mask = tf.tile(mask, [1, 1, 3])
-    image = tf.where(
-        tf.equal(mask, 0), tf.ones_like(image, dtype=image.dtype) * replace_value, image
-    )
+    image = tfa.image.utils.from_4D_image(image, 3)
     return image
 
 
@@ -314,8 +265,7 @@ def _randomly_negate_value(tensor):
 
 
 def get_transform(magnitude, transform_name):
-    replace_value = [128] * 3
-    cutout_const = 40
+    cutout_const = 80
     translate_const = 100
 
     max_magnitude = 10.0
@@ -339,22 +289,11 @@ def get_transform(magnitude, transform_name):
         "Contrast": {"factor": enhance_factor},
         "Brightness": {"factor": enhance_factor},
         "Sharpness": {"factor": enhance_factor},
-        "ShearX": {
-            "level": _randomly_negate_value(shear_level),
-        },
-        "ShearY": {
-            "level": _randomly_negate_value(shear_level),
-        },
-        "TranslateX": {
-            "pixels": _randomly_negate_value(translate_pixels),
-        },
-        "TranslateY": {
-            "pixels": _randomly_negate_value(translate_pixels),
-        },
-        "Cutout": {
-            "pad_size": int(magnitude_ratio * cutout_const),
-            "replace_value": replace_value,
-        },
+        "ShearX": {"level": _randomly_negate_value(shear_level)},
+        "ShearY": {"level": _randomly_negate_value(shear_level)},
+        "TranslateX": {"pixels": _randomly_negate_value(translate_pixels)},
+        "TranslateY": {"pixels": _randomly_negate_value(translate_pixels)},
+        "Cutout": {"mask_size": int(magnitude_ratio * cutout_const)},
     }
 
     name_transform_map = {
@@ -375,10 +314,6 @@ def get_transform(magnitude, transform_name):
         "Contrast": contrast,
         "Brightness": brightness,
         "Sharpness": sharpness,
-        # "ShearX": with_wrapping(shear_x, replace_value),
-        # "ShearY": with_wrapping(shear_y, replace_value),
-        # "TranslateX": with_wrapping(translate_x, replace_value),
-        # "TranslateY": with_wrapping(translate_y, replace_value),
         "ShearX": shear_x,
         "ShearY": shear_y,
         "TranslateX": translate_x,

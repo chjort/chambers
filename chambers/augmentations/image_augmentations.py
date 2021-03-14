@@ -151,15 +151,26 @@ class AutoAugment(preprocessing.PreprocessingLayer):
 
 
 class RandAugment(preprocessing.PreprocessingLayer):
-    def __init__(self, num_layers, magnitude, name=None, **kwargs):
+    def __init__(self, n_transforms, magnitude, separate=False, name=None, **kwargs):
         super(RandAugment, self).__init__(name=name, **kwargs)
-        self.num_layers = num_layers
+        self.n_transforms = n_transforms
         self.magnitude = magnitude
+        self.separate = separate
         self.input_spec = InputSpec(ndim=4)
 
     def call(self, inputs, **kwargs):
-        fn = lambda x: rand_augment(x, n=self.num_layers, magnitude=self.magnitude)
-        return tf.map_fn(fn, inputs)
+
+        if self.separate:
+            x = tf.map_fn(self._rand_augment, inputs)
+        else:
+            x = self._rand_augment(inputs)
+
+        return x
 
     def compute_output_shape(self, input_shape):
         return input_shape
+
+    def _rand_augment(self, inputs):
+        return rand_augment(
+            inputs, n_transforms=self.n_transforms, magnitude=self.magnitude
+        )

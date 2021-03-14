@@ -51,44 +51,37 @@ def blend(image1, image2, factor):
 
 
 ##### Transforms ####
-# TODO: Pain
-def autocontrast(image):
-    """Implements Autocontrast function from PIL using TF ops.
+def autocontrast(images):
+    rank = images.shape.ndims
+    if rank == 4:
+        axis = (1, 2)
+    elif rank == 3:
+        axis = (0, 1)
+    else:
+        raise ValueError(
+            "Images must have rank 3 or rank 4. Found rank {}".format(rank)
+        )
 
-    Args:
-      image: A 3D uint8 tensor.
+    lo = tf.cast(tf.reduce_min(images, axis=axis), tf.float32)
+    hi = tf.cast(tf.reduce_max(images, axis=axis), tf.float32)
 
-    Returns:
-      The image after it has had autocontrast applied to it and will be of type
-      uint8.
-    """
+    scale = tf.math.divide_no_nan(255.0, hi - lo)
+    offset = -lo * scale
 
-    def scale_channel(image):
-        """Scale the 2D image using the autocontrast rule."""
-        # A possibly cheaper version can be done using cumsum/unique_with_counts
-        # over the histogram values, rather than iterating over the entire image.
-        # to compute mins and maxes.
-        lo = tf.cast(tf.reduce_min(image), tf.float32)
-        hi = tf.cast(tf.reduce_max(image), tf.float32)
+    # only scale channels where hi > lo
+    mask = tf.cast(hi > lo, tf.float32)
+    scale = scale * mask + (1 - mask)
+    offset = offset * mask
 
-        # Scale the image, making the lowest value 0 and the highest value 255.
-        def scale_values(im):
-            scale = 255.0 / (hi - lo)
-            offset = -lo * scale
-            im = tf.cast(im, tf.float32) * scale + offset
-            im = tf.clip_by_value(im, 0.0, 255.0)
-            return tf.cast(im, tf.uint8)
+    # if tf.equal(rank, 4):
+    if rank == 4:
+        scale = scale[:, None, None, :]
+        offset = offset[:, None, None, :]
 
-        result = tf.cond(hi > lo, lambda: scale_values(image), lambda: image)
-        return result
-
-    # Assumes RGB for now.  Scales each channel independently
-    # and then stacks the result.
-    s1 = scale_channel(image[:, :, 0])
-    s2 = scale_channel(image[:, :, 1])
-    s3 = scale_channel(image[:, :, 2])
-    image = tf.stack([s1, s2, s3], 2)
-    return image
+    images = tf.cast(images, tf.float32) * scale + offset
+    images = tf.clip_by_value(images, 0.0, 255.0)
+    images = tf.cast(images, tf.uint8)
+    return images
 
 
 # NOTE: Layer
@@ -247,11 +240,18 @@ def translate_y(image, pixels):
 
 # NOTE: Layer
 def cutout(image, mask_size):
-    image = tfa.image.utils.to_4D_image(image)
+    rank = image.shape.ndims
+
+    if rank == 3:
+        image = tf.expand_dims(image, 0)
+
     image = tfa.image.random_cutout(
         image, mask_size=mask_size, constant_values=_FILL_VALUE
     )
-    image = tfa.image.utils.from_4D_image(image, 3)
+
+    if rank == 3:
+        image = image[0]
+
     return image
 
 
@@ -354,11 +354,11 @@ available_transforms = [
 ]
 
 
-def rand_augment(image, n, magnitude):
+def rand_augment(image, n_transforms, magnitude):
     k = len(available_transforms)
     magnitude = float(magnitude)
 
-    for i in range(n):
+    for i in range(n_transforms):
         transform_idx = tf.random.uniform([], maxval=k, dtype=tf.int32)
         for j, transform_name in enumerate(available_transforms):
             transform = get_transform(magnitude, transform_name)

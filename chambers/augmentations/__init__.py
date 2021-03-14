@@ -16,6 +16,7 @@ from .image_augmentations import (
     ResizingMinMax,
     AutoAugment,
     RandAugment,
+    RandomChance,
 )
 from .rand_aug import (
     AutoContrast,

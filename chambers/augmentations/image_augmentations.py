@@ -8,6 +8,46 @@ from chambers.augmentations.augment_schemes import (
 )
 
 
+class RandomChance(preprocessing.PreprocessingLayer):
+    def __init__(
+        self,
+        transform: preprocessing.PreprocessingLayer,
+        probability,
+        name=None,
+        **kwargs
+    ):
+        if name is None and transform.name is not None:
+            name = "random_chance_" + transform.name
+        super(RandomChance, self).__init__(name=name, **kwargs)
+        self.transform = transform
+        self.probability = probability
+
+    def call(self, inputs, **kwargs):
+        do_transform = tf.random.uniform([]) < self.probability
+        x = tf.cond(
+            pred=do_transform,
+            true_fn=lambda: self.transform(inputs),
+            false_fn=lambda: inputs,
+        )
+        return x
+
+    def compute_output_shape(self, input_shape):
+        return self.transform.compute_output_shape(input_shape)
+
+    def get_config(self):
+        config = {
+            "transform": tf.keras.layers.serialize(self.transform),
+            "probability": self.probability,
+        }
+        base_config = super(RandomChance, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
+
+    @classmethod
+    def from_config(cls, config):
+        config["transform"] = tf.keras.layers.deserialize(config["transform"])
+        return cls(**config)
+
+
 class ImageNetNormalization(preprocessing.PreprocessingLayer):
     def __init__(self, mode="caffe", name=None, **kwargs):
         super(ImageNetNormalization, self).__init__(name=name, **kwargs)
@@ -148,6 +188,91 @@ class AutoAugment(preprocessing.PreprocessingLayer):
 
     def compute_output_shape(self, input_shape):
         return input_shape
+
+
+policy = [
+    # [(Transform, Probability, Magnitude), (Transform, Probability, Magnitude)]
+    [(rand_aug.Equalize, 0.8, None), (rand_aug.ShearY, 0.8, 4)],
+    [(rand_aug.Color, 0.4, 9), (rand_aug.Equalize, 0.6, None)],
+    [(rand_aug.Color, 0.4, 1), (rand_aug.Rotate, 0.6, 8)],
+    [(rand_aug.Solarize, 0.8, 3), (rand_aug.Equalize, 0.4, 7)],
+    [(rand_aug.Solarize, 0.4, 2), (rand_aug.Solarize, 0.6, 2)],
+    [(rand_aug.Color, 0.2, 0), (rand_aug.Equalize, 0.8, None)],
+    [(rand_aug.Equalize, 0.4, None), (rand_aug.SolarizeAdd, 0.8, 3)],
+    [(rand_aug.ShearX, 0.2, 9), (rand_aug.Rotate, 0.6, 8)],
+    [(rand_aug.Color, 0.6, 1), (rand_aug.Equalize, 1.0, None)],
+    [(rand_aug.Invert, 0.4, None), (rand_aug.Rotate, 0.6, 0)],
+    [(rand_aug.Equalize, 1.0, None), (rand_aug.ShearY, 0.6, 3)],
+    [(rand_aug.Color, 0.4, 7), (rand_aug.Equalize, 0.6, None)],
+    [(rand_aug.Posterize, 0.4, 6), (rand_aug.AutoContrast, 0.4, None)],
+    [(rand_aug.Solarize, 0.6, 8), (rand_aug.Color, 0.6, 9)],
+    [(rand_aug.Solarize, 0.2, 4), (rand_aug.Rotate, 0.8, 9)],
+    [(rand_aug.Rotate, 1.0, 7), (rand_aug.TranslateY, 0.8, 9)],
+    [(rand_aug.ShearX, 0.0, 0), (rand_aug.Solarize, 0.8, 4)],
+    [(rand_aug.ShearY, 0.8, 0), (rand_aug.Color, 0.6, 4)],
+    [(rand_aug.Color, 1.0, 0), (rand_aug.Rotate, 0.6, 2)],
+    [(rand_aug.Equalize, 0.8, None), (rand_aug.Equalize, 0.0, None)],
+    [(rand_aug.Equalize, 1.0, None), (rand_aug.AutoContrast, 0.6, None)],
+    [(rand_aug.ShearY, 0.4, 7), (rand_aug.SolarizeAdd, 0.6, 7)],
+    [(rand_aug.Posterize, 0.8, 2), (rand_aug.Solarize, 0.6, 10)],
+    [(rand_aug.Solarize, 0.6, 8), (rand_aug.Equalize, 0.6, 1)],
+    [(rand_aug.Color, 0.8, 6), (rand_aug.Rotate, 0.4, 5)],
+]
+
+
+class AutoAugment2(preprocessing.PreprocessingLayer):
+    """ Applies a random augmentation pair to each image """
+
+    def __init__(self, name=None, **kwargs):
+        super(AutoAugment2, self).__init__(name=name, **kwargs)
+
+        self._max_magnitude = 10.0
+        # self.transforms = [
+        #     tf.keras.Sequential(
+        #         [
+        #             RandomChance(rand_aug.Equalize(), 0.8),
+        #             RandomChance(
+        #                 rand_aug.ShearY(level=self._shear_magnitude_to_level(4)), 0.8
+        #             ),
+        #         ]
+        #     ),
+        # ]
+
+        self.input_spec = InputSpec(ndim=4)
+
+    def call(self, inputs, **kwargs):
+        fn = lambda x: distort_image_with_autoaugment(x, augmentation_name="v0")
+        return tf.map_fn(fn, inputs)
+
+    def compute_output_shape(self, input_shape):
+        return input_shape
+
+    def _rotate_magnitude_to_degrees(self, magnitude):
+        degrees = magnitude / self._max_magnitude * 30.0
+        return degrees
+
+    def _enhance_magnitude_to_factor(self, magnitude):
+        return magnitude / self._max_magnitude * 1.8 + 0.1
+
+    def _shear_magnitude_to_level(self, magnitude):
+        magnitude = magnitude / self._max_magnitude * 0.3
+        return magnitude
+
+    def _translate_magnitude_to_pixels(self, magnitude):
+        magnitude = magnitude / self._max_magnitude * 100
+        return magnitude
+
+    def _posterize_magnitude_to_bits(self, magnitude):
+        magnitude = magnitude / self._max_magnitude * 4
+        return magnitude
+
+    def _solarize_magnitude_to_threshold(self, magnitude):
+        magnitude = magnitude / self._max_magnitude * 256
+        return magnitude
+
+    def _solarizeadd_magnitude_to_addition(self, magnitude):
+        magnitude = magnitude / self._max_magnitude * 110
+        return magnitude
 
 
 class RandAugment(preprocessing.PreprocessingLayer):

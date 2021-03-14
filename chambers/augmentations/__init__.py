@@ -11,4 +11,27 @@ from tensorflow.keras.layers.experimental.preprocessing import (
     Resizing,
     CenterCrop,
 )
-from .image_augmentations import ImageNetNormalization, ResizingMinMax, AutoAugment, RandAugment
+from .image_augmentations import (
+    ImageNetNormalization,
+    ResizingMinMax,
+    AutoAugment,
+    RandAugment,
+)
+from .rand_aug import (
+    AutoContrast,
+    Equalize,
+    Invert,
+    Brightness,
+    Contrast,
+    Color,
+    Sharpness,
+    ShearX,
+    ShearY,
+    TranslateX,
+    TranslateY,
+    Posterize,
+    Solarize,
+    SolarizeAdd,
+    CutOut,
+    Rotate,
+)

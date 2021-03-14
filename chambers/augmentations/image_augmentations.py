@@ -2,10 +2,10 @@ import tensorflow as tf
 from tensorflow.keras.layers.experimental import preprocessing
 from tensorflow.python.keras.engine.input_spec import InputSpec
 
+from chambers.augmentations import rand_aug
 from chambers.augmentations.augment_schemes import (
     distort_image_with_autoaugment,
 )
-from chambers.augmentations.rand_aug import rand_augment
 
 
 class ImageNetNormalization(preprocessing.PreprocessingLayer):
@@ -156,12 +156,48 @@ class RandAugment(preprocessing.PreprocessingLayer):
         self.n_transforms = n_transforms
         self.magnitude = magnitude
         self.separate = separate
+
+        max_magnitude = 10.0
+        magnitude_ratio = magnitude / max_magnitude
+
+        rotate_const = 30.0
+        cutout_const = 80
+        posterize_const = 4
+        solarize_const = 256
+        solarize_add_const = 110
+        translate_const = 100
+
+        enhance_factor = magnitude_ratio * 1.8 + 0.1
+        shear_level = magnitude_ratio * 0.3
+        translate_pixels = magnitude_ratio * translate_const
+
+        self.transforms = [
+            rand_aug.AutoContrast(),
+            rand_aug.Equalize(),
+            rand_aug.Invert(),
+            rand_aug.Brightness(factor=enhance_factor),
+            rand_aug.Contrast(factor=enhance_factor),
+            rand_aug.Color(factor=enhance_factor),
+            rand_aug.Sharpness(factor=enhance_factor),
+            rand_aug.ShearX(level=shear_level),
+            rand_aug.ShearY(level=shear_level),
+            rand_aug.TranslateX(pixels=translate_pixels),
+            rand_aug.TranslateY(pixels=translate_pixels),
+            rand_aug.Posterize(bits=int(magnitude_ratio * posterize_const)),
+            rand_aug.Solarize(threshold=int(magnitude_ratio * solarize_const)),
+            rand_aug.SolarizeAdd(addition=int(magnitude_ratio * solarize_add_const)),
+            rand_aug.CutOut(mask_size=int(magnitude_ratio * cutout_const)),
+            rand_aug.Rotate(degrees=magnitude_ratio * rotate_const),
+        ]
+
         self.input_spec = InputSpec(ndim=4)
 
     def call(self, inputs, **kwargs):
 
         if self.separate:
+            inputs = tf.expand_dims(inputs, 1)
             x = tf.map_fn(self._rand_augment, inputs)
+            x = tf.squeeze(x)
         else:
             x = self._rand_augment(inputs)
 
@@ -170,7 +206,24 @@ class RandAugment(preprocessing.PreprocessingLayer):
     def compute_output_shape(self, input_shape):
         return input_shape
 
+    def get_config(self):
+        config = {
+            "n_transforms": self.n_transforms,
+            "magnitude": self.magnitude,
+            "separate": self.separate,
+        }
+        base_config = super(ResizingMinMax, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
+
     def _rand_augment(self, inputs):
-        return rand_augment(
-            inputs, n_transforms=self.n_transforms, magnitude=self.magnitude
-        )
+        for i in range(self.n_transforms):
+            transform_idx = tf.random.uniform(
+                [], maxval=len(self.transforms), dtype=tf.int32
+            )
+            for j, transform in enumerate(self.transforms):
+                inputs = tf.cond(
+                    pred=tf.equal(j, transform_idx),
+                    true_fn=lambda: transform(inputs),
+                    false_fn=lambda: inputs,
+                )
+        return inputs

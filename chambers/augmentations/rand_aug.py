@@ -4,62 +4,8 @@ from functools import partial
 import tensorflow as tf
 import tensorflow_addons as tfa
 
-
-def wrap(image):
-    """Returns 'image' with an extra channel set to all 1s."""
-    shape = tf.shape(image)
-    extended_channel = tf.ones([shape[0], shape[1], 1], image.dtype)
-    extended = tf.concat([image, extended_channel], 2)
-    return extended
-
-
-def unwrap(image, replace_value):
-    """Unwraps an image produced by wrap.
-
-    Where there is a 0 in the last channel for every spatial position,
-    the rest of the three channels in that spatial dimension are grayed
-    (set to 128).  Operations like translate and shear on a wrapped
-    Tensor will leave 0s in empty locations.  Some transformations look
-    at the intensity of values to do preprocessing, and we want these
-    empty pixels to assume the 'average' value, rather than pure black.
-
-
-    Args:
-      image: A 3D Image Tensor with 4 channels.
-      replace_value: A one or three value 1D tensor to fill empty pixels.
-
-    Returns:
-      image: A 3D image Tensor with 3 channels.
-    """
-    image_shape = tf.shape(image)
-    # Flatten the spatial dimensions.
-    flattened_image = tf.reshape(image, [-1, image_shape[2]])
-
-    # Find all pixels where the last channel is zero.
-    alpha_channel = flattened_image[:, 3]
-
-    replace_value = tf.concat([replace_value, tf.ones([1], image.dtype)], 0)
-
-    # Where they are zero, fill them in with 'replace'.
-    flattened_image = tf.where(
-        tf.expand_dims(tf.equal(alpha_channel, 0), -1),
-        tf.ones_like(flattened_image, dtype=image.dtype) * replace_value,
-        flattened_image,
-    )
-
-    image = tf.reshape(flattened_image, image_shape)
-    image = tf.slice(image, [0, 0, 0], [image_shape[0], image_shape[1], 3])
-    return image
-
-
-def with_wrapping(fn, replace_value):
-    def wrapped_fn(image, *args, **kwargs):
-        image = wrap(image)
-        output = fn(image, *args, **kwargs)
-        output = unwrap(output, replace_value)
-        return output
-
-    return wrapped_fn
+_FILL_VALUE = 128
+_INTERPOLATION_MODE = "nearest"
 
 
 def blend(image1, image2, factor):
@@ -106,6 +52,7 @@ def blend(image1, image2, factor):
 
 
 ##### Transforms ####
+# TODO: Pain
 def autocontrast(image):
     """Implements Autocontrast function from PIL using TF ops.
 
@@ -145,54 +92,19 @@ def autocontrast(image):
     return image
 
 
+# NOTE: Layer
 def equalize(image):
-    """Implements Equalize function from PIL using TF ops."""
-
-    def scale_channel(im, c):
-        """Scale the data in the channel to implement equalize."""
-        im = tf.cast(im[:, :, c], tf.int32)
-        # Compute the histogram of the image channel.
-        histo = tf.histogram_fixed_width(im, [0, 255], nbins=256)
-
-        # For the purposes of computing the step, filter out the nonzeros.
-        nonzero = tf.where(tf.not_equal(histo, 0))
-        nonzero_histo = tf.reshape(tf.gather(histo, nonzero), [-1])
-        step = (tf.reduce_sum(nonzero_histo) - nonzero_histo[-1]) // 255
-
-        def build_lut(histo, step):
-            # Compute the cumulative sum, shifting by step // 2
-            # and then normalization by step.
-            lut = (tf.cumsum(histo) + (step // 2)) // step
-            # Shift lut, prepending with 0.
-            lut = tf.concat([[0], lut[:-1]], 0)
-            # Clip the counts to be in range.  This is done
-            # in the C code for image.point.
-            return tf.clip_by_value(lut, 0, 255)
-
-        # If step is zero, return the original image.  Otherwise, build
-        # lut from the full histogram and step and then index from it.
-        result = tf.cond(
-            tf.equal(step, 0), lambda: im, lambda: tf.gather(build_lut(histo, step), im)
-        )
-
-        return tf.cast(result, tf.uint8)
-
-    # Assumes RGB for now.  Scales each channel independently
-    # and then stacks the result.
-    s1 = scale_channel(image, 0)
-    s2 = scale_channel(image, 1)
-    s3 = scale_channel(image, 2)
-    image = tf.stack([s1, s2, s3], 2)
-    return image
+    return tfa.image.equalize(image)
 
 
+# NOTE: Layer
 def invert(image):
     """Inverts the image pixels."""
     image = tf.convert_to_tensor(image)
     return 255 - image
 
 
-# TODO: Existing keras layer?
+# NOTE: Layer
 def rotate(image, degrees):
     """Rotates the image by degrees either clockwise or counterclockwise.
 
@@ -214,15 +126,23 @@ def rotate(image, degrees):
     # In practice, we should randomize the rotation degrees by flipping
     # it negatively half the time, but that's done on 'degrees' outside
     # of the function.
-    return tfa.image.rotate(image, radians)
+    return tfa.image.rotate(
+        image,
+        radians,
+        interpolation=_INTERPOLATION_MODE,
+        fill_mode="constant",
+        fill_value=_FILL_VALUE,
+    )
 
 
+# NOTE: Layer
 def posterize(image, bits):
     """Equivalent of PIL Posterize."""
     shift = 8 - bits
     return tf.bitwise.left_shift(tf.bitwise.right_shift(image, shift), shift)
 
 
+# NOTE: Layer
 def solarize(image, threshold=128):
     # For each pixel in the image, select the pixel
     # if the value is less than the threshold.
@@ -230,6 +150,7 @@ def solarize(image, threshold=128):
     return tf.where(image < threshold, image, 255 - image)
 
 
+# NOTE: Layer
 def solarize_add(image, addition=0, threshold=128):
     # For each pixel in the image less than threshold
     # we add 'addition' amount to it and then clip the
@@ -240,13 +161,14 @@ def solarize_add(image, addition=0, threshold=128):
     return tf.where(image < threshold, added_image, image)
 
 
+# NOTE: Layer
 def color(image, factor):
     """Equivalent of PIL Color."""
     degenerate = tf.image.grayscale_to_rgb(tf.image.rgb_to_grayscale(image))
     return blend(degenerate, image, factor)
 
 
-# TODO: Existing keras layer?
+# TODO: Pain
 def contrast(image, factor):
     """Equivalent of PIL Contrast."""
     degenerate = tf.image.rgb_to_grayscale(image)
@@ -263,78 +185,72 @@ def contrast(image, factor):
     degenerate = tf.image.grayscale_to_rgb(tf.cast(degenerate, tf.uint8))
     return blend(degenerate, image, factor)
 
-
-# TODO: Existing keras layer?
+# TODO: Pain
 def brightness(image, factor):
     """Equivalent of PIL Brightness."""
     degenerate = tf.zeros_like(image)
     return blend(degenerate, image, factor)
 
 
+# NOTE: Layer
 def sharpness(image, factor):
-    """Implements Sharpness function from PIL using TF ops."""
-    orig_image = image
-    image = tf.cast(image, tf.float32)
-    # Make image 4D for conv operation.
-    image = tf.expand_dims(image, 0)
-    # SMOOTH PIL Kernel.
-    kernel = (
-        tf.constant(
-            [[1, 1, 1], [1, 5, 1], [1, 1, 1]], dtype=tf.float32, shape=[3, 3, 1, 1]
-        )
-        / 13.0
-    )
-    # Tile across channel dimension.
-    kernel = tf.tile(kernel, [1, 1, 3, 1])
-    strides = [1, 1, 1, 1]
-    degenerate = tf.nn.depthwise_conv2d(
-        input=image, filter=kernel, strides=strides, padding="VALID", dilations=[1, 1]
-    )
-    degenerate = tf.clip_by_value(degenerate, 0.0, 255.0)
-    degenerate = tf.squeeze(tf.cast(degenerate, tf.uint8), [0])
-
-    # For the borders of the resulting image, fill in the values of the
-    # original image.
-    mask = tf.ones_like(degenerate)
-    padded_mask = tf.pad(mask, [[1, 1], [1, 1], [0, 0]])
-    padded_degenerate = tf.pad(degenerate, [[1, 1], [1, 1], [0, 0]])
-    result = tf.where(tf.equal(padded_mask, 1), padded_degenerate, orig_image)
-
-    # Blend the final result.
-    return blend(result, orig_image, factor)
+    return tfa.image.sharpness(image, factor)
 
 
+# NOTE: Layer
 def shear_x(image, level):
     """Equivalent of PIL Shearing in X dimension."""
     # Shear parallel to x axis is a projective transform
     # with a matrix form of:
     # [1  level
     #  0  1].
-    return tfa.image.transform(image, [1.0, level, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0])
+    return tfa.image.transform(
+        image,
+        [1.0, level, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0],
+        interpolation=_INTERPOLATION_MODE,
+        fill_mode="constant",
+        fill_value=_FILL_VALUE,
+    )
 
 
-# pass wrapped image
+# NOTE: Layer
 def shear_y(image, level):
     """Equivalent of PIL Shearing in Y dimension."""
     # Shear parallel to y axis is a projective transform
     # with a matrix form of:
     # [1  0
     #  level  1].
-    return tfa.image.transform(image, [1.0, 0.0, 0.0, level, 1.0, 0.0, 0.0, 0.0])
+    return tfa.image.transform(
+        image,
+        [1.0, 0.0, 0.0, level, 1.0, 0.0, 0.0, 0.0],
+        interpolation=_INTERPOLATION_MODE,
+        fill_mode="constant",
+        fill_value=_FILL_VALUE,
+    )
 
 
-# TODO: Existing keras layer?
-# pass wrapped image
+# NOTE: Layer
 def translate_x(image, pixels):
     """Equivalent of PIL Translate in X dimension."""
-    return tfa.image.translate(image, [-pixels, 0])
+    return tfa.image.translate(
+        image,
+        [-pixels, 0],
+        interpolation=_INTERPOLATION_MODE,
+        fill_mode="constant",
+        fill_value=_FILL_VALUE,
+    )
 
 
-# TODO: Existing keras layer?
-# pass wrapped image
+# NOTE: Layer
 def translate_y(image, pixels):
     """Equivalent of PIL Translate in Y dimension."""
-    return tfa.image.translate(image, [0, -pixels])
+    return tfa.image.translate(
+        image,
+        [0, -pixels],
+        interpolation=_INTERPOLATION_MODE,
+        fill_mode="constant",
+        fill_value=_FILL_VALUE,
+    )
 
 
 def cutout(image, pad_size, replace_value=0):
@@ -445,7 +361,13 @@ def get_transform(magnitude, transform_name):
         "AutoContrast": autocontrast,
         "Equalize": equalize,
         "Invert": invert,
-        "Rotate": with_wrapping(rotate, replace_value),
+        "Rotate": rotate,
+        # "Rotate": preprocessing.RandomRotation(
+        #     factor=magnitude_ratio * 0.0833,
+        #     fill_mode="constant",
+        #     interpolation="nearest",
+        #     fill_value=128,
+        # ),
         "Posterize": posterize,
         "Solarize": solarize,
         "SolarizeAdd": solarize_add,
@@ -453,12 +375,23 @@ def get_transform(magnitude, transform_name):
         "Contrast": contrast,
         "Brightness": brightness,
         "Sharpness": sharpness,
-        "ShearX": with_wrapping(shear_x, replace_value),
-        "ShearY": with_wrapping(shear_y, replace_value),
-        "TranslateX": with_wrapping(translate_x, replace_value),
-        "TranslateY": with_wrapping(translate_y, replace_value),
+        # "ShearX": with_wrapping(shear_x, replace_value),
+        # "ShearY": with_wrapping(shear_y, replace_value),
+        # "TranslateX": with_wrapping(translate_x, replace_value),
+        # "TranslateY": with_wrapping(translate_y, replace_value),
+        "ShearX": shear_x,
+        "ShearY": shear_y,
+        "TranslateX": translate_x,
+        "TranslateY": translate_y,
         "Cutout": cutout,
     }
+
+    # if transform_name == "Rotate":
+    #     def transform(image):
+    #         rotate = name_transform_map[transform_name]
+    #         image = tf.expand_dims(image, 0)
+    #         return rotate(image)[0]
+    #     return transform
 
     transform = partial(
         name_transform_map[transform_name],

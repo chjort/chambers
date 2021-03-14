@@ -46,7 +46,6 @@ def blend(image1, image2, factor):
         return tf.cast(temp, tf.uint8)
 
     # Extrapolate:
-    #
     # We need to clip and then cast.
     return tf.cast(tf.clip_by_value(temp, 0.0, 255.0), tf.uint8)
 
@@ -168,7 +167,7 @@ def color(image, factor):
     return blend(degenerate, image, factor)
 
 
-# TODO: Pain
+# NOTE: Layer
 def contrast(image, factor):
     """Equivalent of PIL Contrast."""
     degenerate = tf.image.rgb_to_grayscale(image)
@@ -186,7 +185,7 @@ def contrast(image, factor):
     return blend(degenerate, image, factor)
 
 
-# TODO: Pain
+# NOTE: Layer
 def brightness(image, factor):
     """Equivalent of PIL Brightness."""
     degenerate = tf.zeros_like(image)

@@ -1,11 +1,10 @@
+from functools import partial
+
 import tensorflow as tf
 from tensorflow.keras.layers.experimental import preprocessing
 from tensorflow.python.keras.engine.input_spec import InputSpec
 
 from chambers.augmentations import rand_aug
-from chambers.augmentations.augment_schemes import (
-    distort_image_with_autoaugment,
-)
 
 
 class RandomChance(preprocessing.PreprocessingLayer):
@@ -177,102 +176,143 @@ class ResizingMinMax(preprocessing.PreprocessingLayer):
         return dict(list(base_config.items()) + list(config.items()))
 
 
-class AutoAugment(preprocessing.PreprocessingLayer):
-    def __init__(self, name=None, **kwargs):
-        super(AutoAugment, self).__init__(name=name, **kwargs)
-        self.input_spec = InputSpec(ndim=4)
-
-    def call(self, inputs, **kwargs):
-        fn = lambda x: distort_image_with_autoaugment(x, augmentation_name="v0")
-        return tf.map_fn(fn, inputs)
-
-    def compute_output_shape(self, input_shape):
-        return input_shape
-
-
 policy = [
     # [(Transform, Probability, Magnitude), (Transform, Probability, Magnitude)]
-    [(rand_aug.Equalize, 0.8, None), (rand_aug.ShearY, 0.8, 4)],
-    [(rand_aug.Color, 0.4, 9), (rand_aug.Equalize, 0.6, None)],
-    [(rand_aug.Color, 0.4, 1), (rand_aug.Rotate, 0.6, 8)],
-    [(rand_aug.Solarize, 0.8, 3), (rand_aug.Equalize, 0.4, 7)],
-    [(rand_aug.Solarize, 0.4, 2), (rand_aug.Solarize, 0.6, 2)],
-    [(rand_aug.Color, 0.2, 0), (rand_aug.Equalize, 0.8, None)],
-    [(rand_aug.Equalize, 0.4, None), (rand_aug.SolarizeAdd, 0.8, 3)],
-    [(rand_aug.ShearX, 0.2, 9), (rand_aug.Rotate, 0.6, 8)],
-    [(rand_aug.Color, 0.6, 1), (rand_aug.Equalize, 1.0, None)],
-    [(rand_aug.Invert, 0.4, None), (rand_aug.Rotate, 0.6, 0)],
-    [(rand_aug.Equalize, 1.0, None), (rand_aug.ShearY, 0.6, 3)],
-    [(rand_aug.Color, 0.4, 7), (rand_aug.Equalize, 0.6, None)],
-    [(rand_aug.Posterize, 0.4, 6), (rand_aug.AutoContrast, 0.4, None)],
-    [(rand_aug.Solarize, 0.6, 8), (rand_aug.Color, 0.6, 9)],
-    [(rand_aug.Solarize, 0.2, 4), (rand_aug.Rotate, 0.8, 9)],
-    [(rand_aug.Rotate, 1.0, 7), (rand_aug.TranslateY, 0.8, 9)],
-    [(rand_aug.ShearX, 0.0, 0), (rand_aug.Solarize, 0.8, 4)],
-    [(rand_aug.ShearY, 0.8, 0), (rand_aug.Color, 0.6, 4)],
-    [(rand_aug.Color, 1.0, 0), (rand_aug.Rotate, 0.6, 2)],
-    [(rand_aug.Equalize, 0.8, None), (rand_aug.Equalize, 0.0, None)],
-    [(rand_aug.Equalize, 1.0, None), (rand_aug.AutoContrast, 0.6, None)],
-    [(rand_aug.ShearY, 0.4, 7), (rand_aug.SolarizeAdd, 0.6, 7)],
-    [(rand_aug.Posterize, 0.8, 2), (rand_aug.Solarize, 0.6, 10)],
-    [(rand_aug.Solarize, 0.6, 8), (rand_aug.Equalize, 0.6, 1)],
-    [(rand_aug.Color, 0.8, 6), (rand_aug.Rotate, 0.4, 5)],
+    [("Equalize", 0.8, None), ("ShearY", 0.8, 4)],
+    [("Color", 0.4, 9), ("Equalize", 0.6, None)],
+    [("Color", 0.4, 1), ("Rotate", 0.6, 8)],
+    [("Solarize", 0.8, 3), ("Equalize", 0.4, 7)],
+    [("Solarize", 0.4, 2), ("Solarize", 0.6, 2)],
+    [("Color", 0.2, 0), ("Equalize", 0.8, None)],
+    [("Equalize", 0.4, None), ("SolarizeAdd", 0.8, 3)],
+    [("ShearX", 0.2, 9), ("Rotate", 0.6, 8)],
+    [("Color", 0.6, 1), ("Equalize", 1.0, None)],
+    [("Invert", 0.4, None), ("Rotate", 0.6, 0)],
+    [("Equalize", 1.0, None), ("ShearY", 0.6, 3)],
+    [("Color", 0.4, 7), ("Equalize", 0.6, None)],
+    [("Posterize", 0.4, 6), ("AutoContrast", 0.4, None)],
+    [("Solarize", 0.6, 8), ("Color", 0.6, 9)],
+    [("Solarize", 0.2, 4), ("Rotate", 0.8, 9)],
+    [("Rotate", 1.0, 7), ("TranslateY", 0.8, 9)],
+    [("ShearX", 0.0, 0), ("Solarize", 0.8, 4)],
+    [("ShearY", 0.8, 0), ("Color", 0.6, 4)],
+    [("Color", 1.0, 0), ("Rotate", 0.6, 2)],
+    [("Equalize", 0.8, None), ("Equalize", 0.0, None)],
+    [("Equalize", 1.0, None), ("AutoContrast", 0.6, None)],
+    [("ShearY", 0.4, 7), ("SolarizeAdd", 0.6, 7)],
+    [("Posterize", 0.8, 2), ("Solarize", 0.6, 10)],
+    [("Solarize", 0.6, 8), ("Equalize", 0.6, 1)],
+    [("Color", 0.8, 6), ("Rotate", 0.4, 5)],
 ]
 
 
-class AutoAugment2(preprocessing.PreprocessingLayer):
+class AutoAugment(preprocessing.PreprocessingLayer):
     """ Applies a random augmentation pair to each image """
 
-    def __init__(self, name=None, **kwargs):
-        super(AutoAugment2, self).__init__(name=name, **kwargs)
-
+    def __init__(self, separate=False, name=None, **kwargs):
+        super(AutoAugment, self).__init__(name=name, **kwargs)
+        self.separate = separate
         self._max_magnitude = 10.0
-        # self.transforms = [
-        #     tf.keras.Sequential(
-        #         [
-        #             RandomChance(rand_aug.Equalize(), 0.8),
-        #             RandomChance(
-        #                 rand_aug.ShearY(level=self._shear_magnitude_to_level(4)), 0.8
-        #             ),
-        #         ]
-        #     ),
-        # ]
+        self.transforms = [
+            tf.keras.Sequential(
+                [
+                    RandomChance(self._get_transform(t1, m1), p1),
+                    RandomChance(self._get_transform(t2, m2), p2),
+                ]
+            )
+            for (t1, p1, m1), (t2, p2, m2) in policy
+        ]
 
         self.input_spec = InputSpec(ndim=4)
 
     def call(self, inputs, **kwargs):
-        fn = lambda x: distort_image_with_autoaugment(x, augmentation_name="v0")
-        return tf.map_fn(fn, inputs)
+
+        if self.separate:
+            inputs = tf.expand_dims(inputs, 1)
+            x = tf.map_fn(partial(self._apply_random, fns=self.transforms, n=1), inputs)
+            x = tf.squeeze(x)
+        else:
+            x = self._apply_random(inputs, fns=self.transforms, n=1)
+
+        return x
 
     def compute_output_shape(self, input_shape):
         return input_shape
 
-    def _rotate_magnitude_to_degrees(self, magnitude):
+    def get_config(self):
+        config = {
+            "separate": self.separate,
+        }
+        base_config = super(AutoAugment, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
+
+    def _enhance_magnitude_to_kwargs(self, magnitude):
+        factor = magnitude / self._max_magnitude * 1.8 + 0.1
+        return {"factor": factor}
+
+    def _shear_magnitude_to_kwargs(self, magnitude):
+        level = magnitude / self._max_magnitude * 0.3
+        return {"level": level}
+
+    def _translate_magnitude_to_kwargs(self, magnitude):
+        pixels = magnitude / self._max_magnitude * 100
+        return {"pixels": pixels}
+
+    def _posterize_magnitude_to_kwargs(self, magnitude):
+        bits = int(magnitude / self._max_magnitude * 4)
+        return {"bits": bits}
+
+    def _solarize_magnitude_to_kwargs(self, magnitude):
+        threshold = int(magnitude / self._max_magnitude * 256)
+        return {"threshold": threshold}
+
+    def _solarizeadd_magnitude_to_kwargs(self, magnitude):
+        addition = int(magnitude / self._max_magnitude * 110)
+        return {"addition": addition}
+
+    def _rotate_magnitude_to_kwargs(self, magnitude):
         degrees = magnitude / self._max_magnitude * 30.0
-        return degrees
+        return {"degrees": degrees}
 
-    def _enhance_magnitude_to_factor(self, magnitude):
-        return magnitude / self._max_magnitude * 1.8 + 0.1
+    def _cutout_magnitude_to_kwargs(self, magnitude):
+        mask_size = int(magnitude / self._max_magnitude * 80)
+        return {"mask_size": mask_size}
 
-    def _shear_magnitude_to_level(self, magnitude):
-        magnitude = magnitude / self._max_magnitude * 0.3
-        return magnitude
+    def _get_transform(self, transform_name, magnitude):
+        magnitude_fn_map = {
+            "AutoContrast": lambda magnitude: {},
+            "Equalize": lambda magnitude: {},
+            "Invert": lambda magnitude: {},
+            "Brightness": self._enhance_magnitude_to_kwargs,
+            "Contrast": self._enhance_magnitude_to_kwargs,
+            "Color": self._enhance_magnitude_to_kwargs,
+            "Sharpness": self._enhance_magnitude_to_kwargs,
+            "ShearX": self._shear_magnitude_to_kwargs,
+            "ShearY": self._shear_magnitude_to_kwargs,
+            "TranslateX": self._translate_magnitude_to_kwargs,
+            "TranslateY": self._translate_magnitude_to_kwargs,
+            "Posterize": self._posterize_magnitude_to_kwargs,
+            "Solarize": self._solarize_magnitude_to_kwargs,
+            "SolarizeAdd": self._solarizeadd_magnitude_to_kwargs,
+            "CutOut": self._cutout_magnitude_to_kwargs,
+            "Rotate": self._rotate_magnitude_to_kwargs,
+        }
 
-    def _translate_magnitude_to_pixels(self, magnitude):
-        magnitude = magnitude / self._max_magnitude * 100
-        return magnitude
+        transform = getattr(rand_aug, transform_name)
+        kwargs = magnitude_fn_map[transform_name](magnitude)
+        return transform(**kwargs)
 
-    def _posterize_magnitude_to_bits(self, magnitude):
-        magnitude = magnitude / self._max_magnitude * 4
-        return magnitude
-
-    def _solarize_magnitude_to_threshold(self, magnitude):
-        magnitude = magnitude / self._max_magnitude * 256
-        return magnitude
-
-    def _solarizeadd_magnitude_to_addition(self, magnitude):
-        magnitude = magnitude / self._max_magnitude * 110
-        return magnitude
+    @staticmethod
+    def _apply_random(inputs, fns, n):
+        for i in range(n):
+            transform_idx = tf.random.uniform([], maxval=len(fns), dtype=tf.int32)
+            for j, fn in enumerate(fns):
+                inputs = tf.cond(
+                    pred=tf.equal(j, transform_idx),
+                    true_fn=lambda: fn(inputs),
+                    false_fn=lambda: inputs,
+                )
+        return inputs
 
 
 class RandAugment(preprocessing.PreprocessingLayer):
@@ -337,7 +377,7 @@ class RandAugment(preprocessing.PreprocessingLayer):
             "magnitude": self.magnitude,
             "separate": self.separate,
         }
-        base_config = super(ResizingMinMax, self).get_config()
+        base_config = super(RandAugment, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
     def _rand_augment(self, inputs):

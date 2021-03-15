@@ -15,6 +15,7 @@ from .image_augmentations import (
     ImageNetNormalization,
     ResizingMinMax,
     AutoAugment,
+    AutoAugment2,
     RandAugment,
     RandomChance,
 )

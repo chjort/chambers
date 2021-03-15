@@ -1,10 +1,62 @@
-from functools import partial
+import math
+from typing import List
 
 import tensorflow as tf
+import tensorflow_addons as tfa
 from tensorflow.keras.layers.experimental import preprocessing
 from tensorflow.python.keras.engine.input_spec import InputSpec
 
-from chambers.augmentations import rand_aug
+_FILL_VALUE = 128
+_INTERPOLATION_MODE = "nearest"
+
+
+def blend(image1, image2, factor):
+    """Blend image1 and image2 using 'factor'.
+
+    Factor can be above 0.0.  A value of 0.0 means only image1 is used.
+    A value of 1.0 means only image2 is used.  A value between 0.0 and
+    1.0 means we linearly interpolate the pixel values between the two
+    images.  A value greater than 1.0 "extrapolates" the difference
+    between the two pixel values, and we clip the results to values
+    between 0 and 255.
+
+    Args:
+      image1: An image Tensor of type uint8.
+      image2: An image Tensor of type uint8.
+      factor: A floating point value above 0.0.
+
+    Returns:
+      A blended image Tensor of type uint8.
+    """
+    if factor == 0.0:
+        return tf.convert_to_tensor(image1)
+    if factor == 1.0:
+        return tf.convert_to_tensor(image2)
+
+    image1 = tf.cast(image1, tf.float32)
+    image2 = tf.cast(image2, tf.float32)
+
+    difference = image2 - image1
+    scaled = factor * difference
+
+    # Do addition in float.
+    temp = tf.cast(image1, tf.float32) + scaled
+
+    # Interpolate
+    if factor > 0.0 and factor < 1.0:
+        # Interpolation means we always stay within 0 and 255.
+        return tf.cast(temp, tf.uint8)
+
+    # Extrapolate:
+    # We need to clip and then cast.
+    return tf.cast(tf.clip_by_value(temp, 0.0, 255.0), tf.uint8)
+
+
+def _randomly_negate_value(value):
+    """With 50% prob turn the value negative."""
+    should_flip = tf.random.uniform([]) < 0.5
+    value = tf.cond(should_flip, lambda: value, lambda: -value)
+    return value
 
 
 class RandomChance(preprocessing.PreprocessingLayer):
@@ -45,6 +97,73 @@ class RandomChance(preprocessing.PreprocessingLayer):
     def from_config(cls, config):
         config["transform"] = tf.keras.layers.deserialize(config["transform"])
         return cls(**config)
+
+
+class RandomChoice(preprocessing.PreprocessingLayer):
+    def __init__(
+        self,
+        transforms: List[preprocessing.PreprocessingLayer],
+        n_transforms,
+        separate=False,
+        name=None,
+        **kwargs
+    ):
+        super(RandomChoice, self).__init__(name=name, **kwargs)
+        self.transforms = transforms
+        self.n_transforms = n_transforms
+        self.separate = separate
+
+    def call(self, inputs, **kwargs):
+        if self.separate:
+            x = tf.expand_dims(inputs, 1)
+            x = tf.map_fn(self._random_transforms, x)
+            x = tf.squeeze(x)
+        else:
+            x = self._random_transforms(inputs)
+        return x
+
+    def compute_output_shape(self, input_shape):
+        # check if all transforms has the same output shape
+        output_shape0 = list(self.transforms[0].compute_output_shape(input_shape))
+        is_equal = [
+            list(transform.compute_output_shape(input_shape)) == output_shape0
+            for transform in self.transforms
+        ]
+        if all(is_equal):
+            return output_shape0
+        else:
+            # otherwise the output shape is unknown
+            return [input_shape[0], None, None, None]
+
+    def get_config(self):
+        config = {
+            "transforms": [
+                tf.keras.layers.serialize(transform) for transform in self.transforms
+            ],
+            "probability": self.probability,
+        }
+        base_config = super(RandomChoice, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
+
+    @classmethod
+    def from_config(cls, config):
+        config["transforms"] = [
+            tf.keras.layers.deserialize(transform) for transform in config["transforms"]
+        ]
+        return cls(**config)
+
+    def _random_transforms(self, inputs):
+        for i in range(self.n_transforms):
+            transform_idx = tf.random.uniform(
+                [], maxval=len(self.transforms), dtype=tf.int32
+            )
+            for j, transform in enumerate(self.transforms):
+                inputs = tf.cond(
+                    pred=tf.equal(j, transform_idx),
+                    true_fn=lambda: transform(inputs),
+                    false_fn=lambda: inputs,
+                )
+        return inputs
 
 
 class ImageNetNormalization(preprocessing.PreprocessingLayer):
@@ -176,64 +295,349 @@ class ResizingMinMax(preprocessing.PreprocessingLayer):
         return dict(list(base_config.items()) + list(config.items()))
 
 
-policy = [
-    # [(Transform, Probability, Magnitude), (Transform, Probability, Magnitude)]
-    [("Equalize", 0.8, None), ("ShearY", 0.8, 4)],
-    [("Color", 0.4, 9), ("Equalize", 0.6, None)],
-    [("Color", 0.4, 1), ("Rotate", 0.6, 8)],
-    [("Solarize", 0.8, 3), ("Equalize", 0.4, 7)],
-    [("Solarize", 0.4, 2), ("Solarize", 0.6, 2)],
-    [("Color", 0.2, 0), ("Equalize", 0.8, None)],
-    [("Equalize", 0.4, None), ("SolarizeAdd", 0.8, 3)],
-    [("ShearX", 0.2, 9), ("Rotate", 0.6, 8)],
-    [("Color", 0.6, 1), ("Equalize", 1.0, None)],
-    [("Invert", 0.4, None), ("Rotate", 0.6, 0)],
-    [("Equalize", 1.0, None), ("ShearY", 0.6, 3)],
-    [("Color", 0.4, 7), ("Equalize", 0.6, None)],
-    [("Posterize", 0.4, 6), ("AutoContrast", 0.4, None)],
-    [("Solarize", 0.6, 8), ("Color", 0.6, 9)],
-    [("Solarize", 0.2, 4), ("Rotate", 0.8, 9)],
-    [("Rotate", 1.0, 7), ("TranslateY", 0.8, 9)],
-    [("ShearX", 0.0, 0), ("Solarize", 0.8, 4)],
-    [("ShearY", 0.8, 0), ("Color", 0.6, 4)],
-    [("Color", 1.0, 0), ("Rotate", 0.6, 2)],
-    [("Equalize", 0.8, None), ("Equalize", 0.0, None)],
-    [("Equalize", 1.0, None), ("AutoContrast", 0.6, None)],
-    [("ShearY", 0.4, 7), ("SolarizeAdd", 0.6, 7)],
-    [("Posterize", 0.8, 2), ("Solarize", 0.6, 10)],
-    [("Solarize", 0.6, 8), ("Equalize", 0.6, 1)],
-    [("Color", 0.8, 6), ("Rotate", 0.4, 5)],
-]
+####### Augmentations used by AutoAugment and RandAugment #######
 
 
-class AutoAugment(preprocessing.PreprocessingLayer):
-    """ Applies a random augmentation pair to each image """
-
-    def __init__(self, separate=False, name=None, **kwargs):
-        super(AutoAugment, self).__init__(name=name, **kwargs)
-        self.separate = separate
-        self._max_magnitude = 10.0
-        self.transforms = [
-            tf.keras.Sequential(
-                [
-                    RandomChance(self._get_transform(t1, m1), p1),
-                    RandomChance(self._get_transform(t2, m2), p2),
-                ]
-            )
-            for (t1, p1, m1), (t2, p2, m2) in policy
-        ]
-
+class AutoContrast(preprocessing.PreprocessingLayer):
+    def __init__(self, name=None, **kwargs):
+        super(AutoContrast, self).__init__(name=name, **kwargs)
         self.input_spec = InputSpec(ndim=4)
 
     def call(self, inputs, **kwargs):
+        lo = tf.cast(tf.reduce_min(inputs, axis=(1, 2)), tf.float32)
+        hi = tf.cast(tf.reduce_max(inputs, axis=(1, 2)), tf.float32)
 
-        if self.separate:
-            inputs = tf.expand_dims(inputs, 1)
-            x = tf.map_fn(partial(self._apply_random, fns=self.transforms, n=1), inputs)
-            x = tf.squeeze(x)
-        else:
-            x = self._apply_random(inputs, fns=self.transforms, n=1)
+        scale = tf.math.divide_no_nan(255.0, hi - lo)
+        offset = -lo * scale
 
+        # only scale channels where hi > lo
+        mask = tf.cast(hi > lo, tf.float32)
+        scale = scale * mask + (1 - mask)
+        offset = offset * mask
+
+        # expand dimensions so it is broadcastable to inputs
+        scale = scale[:, None, None, :]
+        offset = offset[:, None, None, :]
+
+        x = tf.cast(inputs, tf.float32) * scale + offset
+        x = tf.clip_by_value(x, 0.0, 255.0)
+        x = tf.cast(x, tf.uint8)
+        return x
+
+    def compute_output_shape(self, input_shape):
+        return input_shape
+
+
+class Equalize(preprocessing.PreprocessingLayer):
+    def __init__(self, name=None, **kwargs):
+        super(Equalize, self).__init__(name=name, **kwargs)
+        self.input_spec = InputSpec(ndim=4)
+
+    def call(self, inputs, **kwargs):
+        return tfa.image.equalize(inputs)
+
+    def compute_output_shape(self, input_shape):
+        return input_shape
+
+
+class Invert(preprocessing.PreprocessingLayer):
+    def __init__(self, name=None, **kwargs):
+        super(Invert, self).__init__(name=name, **kwargs)
+        self.input_spec = InputSpec(ndim=4)
+
+    def call(self, inputs, **kwargs):
+        return 255 - inputs
+
+    def compute_output_shape(self, input_shape):
+        return input_shape
+
+
+class Rotate(preprocessing.PreprocessingLayer):
+    def __init__(self, degrees, name=None, **kwargs):
+        super(Rotate, self).__init__(name=name, **kwargs)
+        self.degrees = degrees
+        self._radians = degrees * math.pi / 180.0
+        self.input_spec = InputSpec(ndim=4)
+
+    def call(self, inputs, **kwargs):
+        radians = _randomly_negate_value(self._radians)
+        x = tfa.image.rotate(
+            inputs,
+            radians,
+            interpolation=_INTERPOLATION_MODE,
+            fill_mode="constant",
+            fill_value=_FILL_VALUE,
+        )
+        return x
+
+    def compute_output_shape(self, input_shape):
+        return input_shape
+
+    def get_config(self):
+        config = {"degrees": self.degrees}
+        base_config = super(Rotate, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
+
+
+class Posterize(preprocessing.PreprocessingLayer):
+    def __init__(self, bits, name=None, **kwargs):
+        super(Posterize, self).__init__(name=name, **kwargs)
+        self.bits = bits
+        self._shift = 8 - bits
+        self.input_spec = InputSpec(ndim=4)
+
+    def call(self, inputs, **kwargs):
+        x = tf.bitwise.right_shift(inputs, self._shift)
+        x = tf.bitwise.left_shift(x, self._shift)
+        return x
+
+    def compute_output_shape(self, input_shape):
+        return input_shape
+
+    def get_config(self):
+        config = {"bits": self.bits}
+        base_config = super(Posterize, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
+
+
+class Solarize(preprocessing.PreprocessingLayer):
+    def __init__(self, threshold=128, name=None, **kwargs):
+        super(Solarize, self).__init__(name=name, **kwargs)
+        self.threshold = threshold
+        self.input_spec = InputSpec(ndim=4)
+
+    def call(self, inputs, **kwargs):
+        return tf.where(inputs < self.threshold, inputs, 255 - inputs)
+
+    def compute_output_shape(self, input_shape):
+        return input_shape
+
+    def get_config(self):
+        config = {"threshold": self.threshold}
+        base_config = super(Solarize, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
+
+
+class SolarizeAdd(preprocessing.PreprocessingLayer):
+    def __init__(self, addition=0, threshold=128, name=None, **kwargs):
+        super(SolarizeAdd, self).__init__(name=name, **kwargs)
+        self.addition = addition
+        self.threshold = threshold
+        self.input_spec = InputSpec(ndim=4)
+
+    def call(self, inputs, **kwargs):
+        x = tf.cast(inputs, tf.int64) + self.addition
+        x = tf.cast(tf.clip_by_value(x, 0, 255), tf.uint8)
+        return tf.where(inputs < self.threshold, x, inputs)
+
+    def compute_output_shape(self, input_shape):
+        return input_shape
+
+    def get_config(self):
+        config = {"addition": self.addition, "threshold": self.threshold}
+        base_config = super(SolarizeAdd, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
+
+
+class Color(preprocessing.PreprocessingLayer):
+    def __init__(self, factor, name=None, **kwargs):
+        super(Color, self).__init__(name=name, **kwargs)
+        self.factor = factor
+        self.input_spec = InputSpec(ndim=4)
+
+    def call(self, inputs, **kwargs):
+        degenerate = tf.image.grayscale_to_rgb(tf.image.rgb_to_grayscale(inputs))
+        return blend(degenerate, inputs, self.factor)
+
+    def compute_output_shape(self, input_shape):
+        return input_shape
+
+    def get_config(self):
+        config = {"factor": self.factor}
+        base_config = super(Color, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
+
+
+class Contrast(preprocessing.PreprocessingLayer):
+    def __init__(self, factor, name=None, **kwargs):
+        super(Contrast, self).__init__(name=name, **kwargs)
+        self.factor = factor
+        self.input_spec = InputSpec(ndim=4)
+
+    def call(self, inputs, **kwargs):
+        degenerate = tf.image.rgb_to_grayscale(inputs)
+        degenerate = tf.cast(degenerate, tf.int32)
+
+        # Compute the grayscale histogram, then compute the mean pixel value,
+        # and create a constant image size of that value.  Use that as the
+        # blending degenerate target of the original image.
+        hist = tf.histogram_fixed_width(degenerate, [0, 255], nbins=256)
+        mean = tf.reduce_sum(tf.cast(hist, tf.float32)) / 256.0
+        degenerate = tf.ones_like(degenerate, dtype=tf.float32) * mean
+        degenerate = tf.clip_by_value(degenerate, 0.0, 255.0)
+        degenerate = tf.image.grayscale_to_rgb(tf.cast(degenerate, tf.uint8))
+        return blend(degenerate, inputs, self.factor)
+
+    def compute_output_shape(self, input_shape):
+        return input_shape
+
+    def get_config(self):
+        config = {"factor": self.factor}
+        base_config = super(Contrast, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
+
+
+class Brightness(preprocessing.PreprocessingLayer):
+    def __init__(self, factor, name=None, **kwargs):
+        super(Brightness, self).__init__(name=name, **kwargs)
+        self.factor = factor
+        self.input_spec = InputSpec(ndim=4)
+
+    def call(self, inputs, **kwargs):
+        degenerate = tf.zeros_like(inputs)
+        return blend(degenerate, inputs, self.factor)
+
+    def compute_output_shape(self, input_shape):
+        return input_shape
+
+    def get_config(self):
+        config = {"factor": self.factor}
+        base_config = super(Brightness, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
+
+
+class Sharpness(preprocessing.PreprocessingLayer):
+    def __init__(self, factor, name=None, **kwargs):
+        super(Sharpness, self).__init__(name=name, **kwargs)
+        self.factor = factor
+        self.input_spec = InputSpec(ndim=4)
+
+    def call(self, inputs, **kwargs):
+        return tfa.image.sharpness(inputs, self.factor)
+
+    def compute_output_shape(self, input_shape):
+        return input_shape
+
+    def get_config(self):
+        config = {"factor": self.factor}
+        base_config = super(Sharpness, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
+
+
+class ShearX(preprocessing.PreprocessingLayer):
+    def __init__(self, level, name=None, **kwargs):
+        super(ShearX, self).__init__(name=name, **kwargs)
+        self.level = level
+        self.input_spec = InputSpec(ndim=4)
+
+    def call(self, inputs, **kwargs):
+        level = _randomly_negate_value(self.level)
+        x = tfa.image.transform(
+            inputs,
+            [1.0, level, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0],
+            interpolation=_INTERPOLATION_MODE,
+            fill_mode="constant",
+            fill_value=_FILL_VALUE,
+        )
+        return x
+
+    def compute_output_shape(self, input_shape):
+        return input_shape
+
+    def get_config(self):
+        config = {"level": self.level}
+        base_config = super(ShearX, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
+
+
+class ShearY(preprocessing.PreprocessingLayer):
+    def __init__(self, level, name=None, **kwargs):
+        super(ShearY, self).__init__(name=name, **kwargs)
+        self.level = level
+        self.input_spec = InputSpec(ndim=4)
+
+    def call(self, inputs, **kwargs):
+        level = _randomly_negate_value(self.level)
+        x = tfa.image.transform(
+            inputs,
+            [1.0, 0.0, 0.0, level, 1.0, 0.0, 0.0, 0.0],
+            interpolation=_INTERPOLATION_MODE,
+            fill_mode="constant",
+            fill_value=_FILL_VALUE,
+        )
+        return x
+
+    def compute_output_shape(self, input_shape):
+        return input_shape
+
+    def get_config(self):
+        config = {"level": self.level}
+        base_config = super(ShearY, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
+
+
+class TranslateX(preprocessing.PreprocessingLayer):
+    def __init__(self, pixels, name=None, **kwargs):
+        super(TranslateX, self).__init__(name=name, **kwargs)
+        self.pixels = pixels
+        self.input_spec = InputSpec(ndim=4)
+
+    def call(self, inputs, **kwargs):
+        pixels = _randomly_negate_value(self.pixels)
+        x = tfa.image.translate(
+            inputs,
+            [-pixels, 0],
+            interpolation=_INTERPOLATION_MODE,
+            fill_mode="constant",
+            fill_value=_FILL_VALUE,
+        )
+        return x
+
+    def compute_output_shape(self, input_shape):
+        return input_shape
+
+    def get_config(self):
+        config = {"pixels": self.pixels}
+        base_config = super(TranslateX, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
+
+
+class TranslateY(preprocessing.PreprocessingLayer):
+    def __init__(self, pixels, name=None, **kwargs):
+        super(TranslateY, self).__init__(name=name, **kwargs)
+        self.pixels = pixels
+        self.input_spec = InputSpec(ndim=4)
+
+    def call(self, inputs, **kwargs):
+        pixels = _randomly_negate_value(self.pixels)
+        x = tfa.image.translate(
+            inputs,
+            [0, -pixels],
+            interpolation=_INTERPOLATION_MODE,
+            fill_mode="constant",
+            fill_value=_FILL_VALUE,
+        )
+        return x
+
+    def compute_output_shape(self, input_shape):
+        return input_shape
+
+    def get_config(self):
+        config = {"pixels": self.pixels}
+        base_config = super(TranslateY, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
+
+
+class CutOut(preprocessing.PreprocessingLayer):
+    def __init__(self, mask_size, name=None, **kwargs):
+        super(CutOut, self).__init__(name=name, **kwargs)
+        self.mask_size = mask_size
+        self.input_spec = InputSpec(ndim=4)
+
+    def call(self, inputs, **kwargs):
+        x = tfa.image.random_cutout(
+            inputs, mask_size=self.mask_size, constant_values=_FILL_VALUE
+        )
         return x
 
     def compute_output_shape(self, input_shape):
@@ -241,195 +645,7 @@ class AutoAugment(preprocessing.PreprocessingLayer):
 
     def get_config(self):
         config = {
-            "separate": self.separate,
+            "mask_size": self.mask_size,
         }
-        base_config = super(AutoAugment, self).get_config()
+        base_config = super(CutOut, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
-
-    def _enhance_magnitude_to_kwargs(self, magnitude):
-        factor = magnitude / self._max_magnitude * 1.8 + 0.1
-        return {"factor": factor}
-
-    def _shear_magnitude_to_kwargs(self, magnitude):
-        level = magnitude / self._max_magnitude * 0.3
-        return {"level": level}
-
-    def _translate_magnitude_to_kwargs(self, magnitude):
-        pixels = magnitude / self._max_magnitude * 100
-        return {"pixels": pixels}
-
-    def _posterize_magnitude_to_kwargs(self, magnitude):
-        bits = int(magnitude / self._max_magnitude * 4)
-        return {"bits": bits}
-
-    def _solarize_magnitude_to_kwargs(self, magnitude):
-        threshold = int(magnitude / self._max_magnitude * 256)
-        return {"threshold": threshold}
-
-    def _solarizeadd_magnitude_to_kwargs(self, magnitude):
-        addition = int(magnitude / self._max_magnitude * 110)
-        return {"addition": addition}
-
-    def _rotate_magnitude_to_kwargs(self, magnitude):
-        degrees = magnitude / self._max_magnitude * 30.0
-        return {"degrees": degrees}
-
-    def _cutout_magnitude_to_kwargs(self, magnitude):
-        mask_size = int(magnitude / self._max_magnitude * 80)
-        return {"mask_size": mask_size}
-
-    def _get_transform(self, transform_name, magnitude):
-        magnitude_fn_map = {
-            "AutoContrast": lambda magnitude: {},
-            "Equalize": lambda magnitude: {},
-            "Invert": lambda magnitude: {},
-            "Brightness": self._enhance_magnitude_to_kwargs,
-            "Contrast": self._enhance_magnitude_to_kwargs,
-            "Color": self._enhance_magnitude_to_kwargs,
-            "Sharpness": self._enhance_magnitude_to_kwargs,
-            "ShearX": self._shear_magnitude_to_kwargs,
-            "ShearY": self._shear_magnitude_to_kwargs,
-            "TranslateX": self._translate_magnitude_to_kwargs,
-            "TranslateY": self._translate_magnitude_to_kwargs,
-            "Posterize": self._posterize_magnitude_to_kwargs,
-            "Solarize": self._solarize_magnitude_to_kwargs,
-            "SolarizeAdd": self._solarizeadd_magnitude_to_kwargs,
-            "CutOut": self._cutout_magnitude_to_kwargs,
-            "Rotate": self._rotate_magnitude_to_kwargs,
-        }
-
-        transform = getattr(rand_aug, transform_name)
-        kwargs = magnitude_fn_map[transform_name](magnitude)
-        return transform(**kwargs)
-
-    @staticmethod
-    def _apply_random(inputs, fns, n):
-        for i in range(n):
-            transform_idx = tf.random.uniform([], maxval=len(fns), dtype=tf.int32)
-            for j, fn in enumerate(fns):
-                inputs = tf.cond(
-                    pred=tf.equal(j, transform_idx),
-                    true_fn=lambda: fn(inputs),
-                    false_fn=lambda: inputs,
-                )
-        return inputs
-
-
-class RandAugment(preprocessing.PreprocessingLayer):
-    def __init__(self, n_transforms, magnitude, separate=False, name=None, **kwargs):
-        super(RandAugment, self).__init__(name=name, **kwargs)
-        self.n_transforms = n_transforms
-        self.magnitude = magnitude
-        self.separate = separate
-
-        self._max_magnitude = 10.0
-
-        self.transforms = [
-            self._get_transform("AutoContrast", magnitude),
-            self._get_transform("Equalize", magnitude),
-            self._get_transform("Invert", magnitude),
-            self._get_transform("Brightness", magnitude),
-            self._get_transform("Contrast", magnitude),
-            self._get_transform("Color", magnitude),
-            self._get_transform("Sharpness", magnitude),
-            self._get_transform("ShearX", magnitude),
-            self._get_transform("ShearY", magnitude),
-            self._get_transform("TranslateX", magnitude),
-            self._get_transform("TranslateY", magnitude),
-            self._get_transform("Posterize", magnitude),
-            self._get_transform("Solarize", magnitude),
-            self._get_transform("SolarizeAdd", magnitude),
-            self._get_transform("CutOut", magnitude),
-            self._get_transform("Rotate", magnitude),
-        ]
-
-        self.input_spec = InputSpec(ndim=4)
-
-    def call(self, inputs, **kwargs):
-
-        if self.separate:
-            inputs = tf.expand_dims(inputs, 1)
-            x = tf.map_fn(partial(self._apply_random, fns=self.transforms, n=1), inputs)
-            x = tf.squeeze(x)
-        else:
-            x = self._apply_random(inputs, fns=self.transforms, n=1)
-
-        return x
-
-    def compute_output_shape(self, input_shape):
-        return input_shape
-
-    def get_config(self):
-        config = {
-            "separate": self.separate,
-        }
-        base_config = super(RandAugment, self).get_config()
-        return dict(list(base_config.items()) + list(config.items()))
-
-    def _enhance_magnitude_to_kwargs(self, magnitude):
-        factor = magnitude / self._max_magnitude * 1.8 + 0.1
-        return {"factor": factor}
-
-    def _shear_magnitude_to_kwargs(self, magnitude):
-        level = magnitude / self._max_magnitude * 0.3
-        return {"level": level}
-
-    def _translate_magnitude_to_kwargs(self, magnitude):
-        pixels = magnitude / self._max_magnitude * 100
-        return {"pixels": pixels}
-
-    def _posterize_magnitude_to_kwargs(self, magnitude):
-        bits = int(magnitude / self._max_magnitude * 4)
-        return {"bits": bits}
-
-    def _solarize_magnitude_to_kwargs(self, magnitude):
-        threshold = int(magnitude / self._max_magnitude * 256)
-        return {"threshold": threshold}
-
-    def _solarizeadd_magnitude_to_kwargs(self, magnitude):
-        addition = int(magnitude / self._max_magnitude * 110)
-        return {"addition": addition}
-
-    def _rotate_magnitude_to_kwargs(self, magnitude):
-        degrees = magnitude / self._max_magnitude * 30.0
-        return {"degrees": degrees}
-
-    def _cutout_magnitude_to_kwargs(self, magnitude):
-        mask_size = int(magnitude / self._max_magnitude * 80)
-        return {"mask_size": mask_size}
-
-    def _get_transform(self, transform_name, magnitude):
-        magnitude_fn_map = {
-            "AutoContrast": lambda magnitude: {},
-            "Equalize": lambda magnitude: {},
-            "Invert": lambda magnitude: {},
-            "Brightness": self._enhance_magnitude_to_kwargs,
-            "Contrast": self._enhance_magnitude_to_kwargs,
-            "Color": self._enhance_magnitude_to_kwargs,
-            "Sharpness": self._enhance_magnitude_to_kwargs,
-            "ShearX": self._shear_magnitude_to_kwargs,
-            "ShearY": self._shear_magnitude_to_kwargs,
-            "TranslateX": self._translate_magnitude_to_kwargs,
-            "TranslateY": self._translate_magnitude_to_kwargs,
-            "Posterize": self._posterize_magnitude_to_kwargs,
-            "Solarize": self._solarize_magnitude_to_kwargs,
-            "SolarizeAdd": self._solarizeadd_magnitude_to_kwargs,
-            "CutOut": self._cutout_magnitude_to_kwargs,
-            "Rotate": self._rotate_magnitude_to_kwargs,
-        }
-
-        transform = getattr(rand_aug, transform_name)
-        kwargs = magnitude_fn_map[transform_name](magnitude)
-        return transform(**kwargs)
-
-    @staticmethod
-    def _apply_random(inputs, fns, n):
-        for i in range(n):
-            transform_idx = tf.random.uniform([], maxval=len(fns), dtype=tf.int32)
-            for j, fn in enumerate(fns):
-                inputs = tf.cond(
-                    pred=tf.equal(j, transform_idx),
-                    true_fn=lambda: fn(inputs),
-                    false_fn=lambda: inputs,
-                )
-        return inputs

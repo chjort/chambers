@@ -14,26 +14,25 @@ from tensorflow.keras.layers.experimental.preprocessing import (
 from .image_augmentations import (
     ImageNetNormalization,
     ResizingMinMax,
-    AutoAugment,
-    RandAugment,
-    RandAugment2,
     RandomChance,
-)
-from .rand_aug import (
     AutoContrast,
     Equalize,
     Invert,
-    Brightness,
-    Contrast,
+    Rotate,
+    Posterize,
+    Solarize,
+    SolarizeAdd,
     Color,
+    Contrast,
+    Brightness,
     Sharpness,
     ShearX,
     ShearY,
     TranslateX,
     TranslateY,
-    Posterize,
-    Solarize,
-    SolarizeAdd,
     CutOut,
-    Rotate,
+)
+from .augmentation_schemes import (
+    AutoAugment,
+    RandAugment,
 )

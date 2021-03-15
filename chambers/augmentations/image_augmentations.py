@@ -104,17 +104,17 @@ class RandomChoice(preprocessing.PreprocessingLayer):
         self,
         transforms: List[preprocessing.PreprocessingLayer],
         n_transforms,
-        separate=False,
+        elementwise=False,
         name=None,
         **kwargs
     ):
         super(RandomChoice, self).__init__(name=name, **kwargs)
         self.transforms = transforms
         self.n_transforms = n_transforms
-        self.separate = separate
+        self.elementwise = elementwise
 
     def call(self, inputs, **kwargs):
-        if self.separate:
+        if self.elementwise:
             x = tf.expand_dims(inputs, 1)
             x = tf.map_fn(self._random_transforms, x)
             x = tf.squeeze(x)

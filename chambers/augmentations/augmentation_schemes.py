@@ -97,16 +97,17 @@ def _get_transform(transform_name, magnitude):
     }
 
     transform = getattr(image_augmentations, transform_name)
-    kwargs = magnitude_fn_map[transform_name](magnitude)
+    kwarg_fn = magnitude_fn_map[transform_name]
+    kwargs = kwarg_fn(magnitude)
     return transform(**kwargs)
 
 
 class AutoAugment(preprocessing.PreprocessingLayer):
     """ Applies a random augmentation pair to each image """
 
-    def __init__(self, separate=False, name=None, **kwargs):
+    def __init__(self, elementwise=False, name=None, **kwargs):
         super(AutoAugment, self).__init__(name=name, **kwargs)
-        self.separate = separate
+        self.elementwise = elementwise
         self.transforms = [
             tf.keras.Sequential(
                 [
@@ -117,7 +118,7 @@ class AutoAugment(preprocessing.PreprocessingLayer):
             for (t1, p1, m1), (t2, p2, m2) in _AUTO_AUGMENT_POLICY_V0
         ]
         self._transform = image_augmentations.RandomChoice(
-            self.transforms, n_transforms=1, separate=separate
+            self.transforms, n_transforms=1, elementwise=elementwise
         )
         self.input_spec = InputSpec(ndim=4)
 
@@ -129,18 +130,18 @@ class AutoAugment(preprocessing.PreprocessingLayer):
 
     def get_config(self):
         config = {
-            "separate": self.separate,
+            "separate": self.elementwise,
         }
         base_config = super(AutoAugment, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
 
 class RandAugment(preprocessing.PreprocessingLayer):
-    def __init__(self, n_transforms, magnitude, separate=False, name=None, **kwargs):
+    def __init__(self, n_transforms, magnitude, elementwise=False, name=None, **kwargs):
         super(RandAugment, self).__init__(name=name, **kwargs)
         self.n_transforms = n_transforms
         self.magnitude = magnitude
-        self.separate = separate
+        self.elementwise = elementwise
         self.transforms = [
             _get_transform("AutoContrast", magnitude),
             _get_transform("Equalize", magnitude),
@@ -160,7 +161,7 @@ class RandAugment(preprocessing.PreprocessingLayer):
             _get_transform("Rotate", magnitude),
         ]
         self._transform = image_augmentations.RandomChoice(
-            self.transforms, n_transforms=n_transforms, separate=separate
+            self.transforms, n_transforms=n_transforms, elementwise=elementwise
         )
         self.input_spec = InputSpec(ndim=4)
 
@@ -174,7 +175,7 @@ class RandAugment(preprocessing.PreprocessingLayer):
         config = {
             "n_transforms": self.n_transforms,
             "magnitude": self.magnitude,
-            "separate": self.separate,
+            "separate": self.elementwise,
         }
         base_config = super(RandAugment, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))

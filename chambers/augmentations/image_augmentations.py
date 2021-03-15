@@ -322,37 +322,25 @@ class RandAugment(preprocessing.PreprocessingLayer):
         self.magnitude = magnitude
         self.separate = separate
 
-        max_magnitude = 10.0
-        magnitude_ratio = magnitude / max_magnitude
-
-        rotate_const = 30.0
-        cutout_const = 80
-        posterize_const = 4
-        solarize_const = 256
-        solarize_add_const = 110
-        translate_const = 100
-
-        enhance_factor = magnitude_ratio * 1.8 + 0.1
-        shear_level = magnitude_ratio * 0.3
-        translate_pixels = magnitude_ratio * translate_const
+        self._max_magnitude = 10.0
 
         self.transforms = [
-            rand_aug.AutoContrast(),
-            rand_aug.Equalize(),
-            rand_aug.Invert(),
-            rand_aug.Brightness(factor=enhance_factor),
-            rand_aug.Contrast(factor=enhance_factor),
-            rand_aug.Color(factor=enhance_factor),
-            rand_aug.Sharpness(factor=enhance_factor),
-            rand_aug.ShearX(level=shear_level),
-            rand_aug.ShearY(level=shear_level),
-            rand_aug.TranslateX(pixels=translate_pixels),
-            rand_aug.TranslateY(pixels=translate_pixels),
-            rand_aug.Posterize(bits=int(magnitude_ratio * posterize_const)),
-            rand_aug.Solarize(threshold=int(magnitude_ratio * solarize_const)),
-            rand_aug.SolarizeAdd(addition=int(magnitude_ratio * solarize_add_const)),
-            rand_aug.CutOut(mask_size=int(magnitude_ratio * cutout_const)),
-            rand_aug.Rotate(degrees=magnitude_ratio * rotate_const),
+            self._get_transform("AutoContrast", magnitude),
+            self._get_transform("Equalize", magnitude),
+            self._get_transform("Invert", magnitude),
+            self._get_transform("Brightness", magnitude),
+            self._get_transform("Contrast", magnitude),
+            self._get_transform("Color", magnitude),
+            self._get_transform("Sharpness", magnitude),
+            self._get_transform("ShearX", magnitude),
+            self._get_transform("ShearY", magnitude),
+            self._get_transform("TranslateX", magnitude),
+            self._get_transform("TranslateY", magnitude),
+            self._get_transform("Posterize", magnitude),
+            self._get_transform("Solarize", magnitude),
+            self._get_transform("SolarizeAdd", magnitude),
+            self._get_transform("CutOut", magnitude),
+            self._get_transform("Rotate", magnitude),
         ]
 
         self.input_spec = InputSpec(ndim=4)
@@ -361,10 +349,10 @@ class RandAugment(preprocessing.PreprocessingLayer):
 
         if self.separate:
             inputs = tf.expand_dims(inputs, 1)
-            x = tf.map_fn(self._rand_augment, inputs)
+            x = tf.map_fn(partial(self._apply_random, fns=self.transforms, n=1), inputs)
             x = tf.squeeze(x)
         else:
-            x = self._rand_augment(inputs)
+            x = self._apply_random(inputs, fns=self.transforms, n=1)
 
         return x
 
@@ -373,22 +361,75 @@ class RandAugment(preprocessing.PreprocessingLayer):
 
     def get_config(self):
         config = {
-            "n_transforms": self.n_transforms,
-            "magnitude": self.magnitude,
             "separate": self.separate,
         }
         base_config = super(RandAugment, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
-    def _rand_augment(self, inputs):
-        for i in range(self.n_transforms):
-            transform_idx = tf.random.uniform(
-                [], maxval=len(self.transforms), dtype=tf.int32
-            )
-            for j, transform in enumerate(self.transforms):
+    def _enhance_magnitude_to_kwargs(self, magnitude):
+        factor = magnitude / self._max_magnitude * 1.8 + 0.1
+        return {"factor": factor}
+
+    def _shear_magnitude_to_kwargs(self, magnitude):
+        level = magnitude / self._max_magnitude * 0.3
+        return {"level": level}
+
+    def _translate_magnitude_to_kwargs(self, magnitude):
+        pixels = magnitude / self._max_magnitude * 100
+        return {"pixels": pixels}
+
+    def _posterize_magnitude_to_kwargs(self, magnitude):
+        bits = int(magnitude / self._max_magnitude * 4)
+        return {"bits": bits}
+
+    def _solarize_magnitude_to_kwargs(self, magnitude):
+        threshold = int(magnitude / self._max_magnitude * 256)
+        return {"threshold": threshold}
+
+    def _solarizeadd_magnitude_to_kwargs(self, magnitude):
+        addition = int(magnitude / self._max_magnitude * 110)
+        return {"addition": addition}
+
+    def _rotate_magnitude_to_kwargs(self, magnitude):
+        degrees = magnitude / self._max_magnitude * 30.0
+        return {"degrees": degrees}
+
+    def _cutout_magnitude_to_kwargs(self, magnitude):
+        mask_size = int(magnitude / self._max_magnitude * 80)
+        return {"mask_size": mask_size}
+
+    def _get_transform(self, transform_name, magnitude):
+        magnitude_fn_map = {
+            "AutoContrast": lambda magnitude: {},
+            "Equalize": lambda magnitude: {},
+            "Invert": lambda magnitude: {},
+            "Brightness": self._enhance_magnitude_to_kwargs,
+            "Contrast": self._enhance_magnitude_to_kwargs,
+            "Color": self._enhance_magnitude_to_kwargs,
+            "Sharpness": self._enhance_magnitude_to_kwargs,
+            "ShearX": self._shear_magnitude_to_kwargs,
+            "ShearY": self._shear_magnitude_to_kwargs,
+            "TranslateX": self._translate_magnitude_to_kwargs,
+            "TranslateY": self._translate_magnitude_to_kwargs,
+            "Posterize": self._posterize_magnitude_to_kwargs,
+            "Solarize": self._solarize_magnitude_to_kwargs,
+            "SolarizeAdd": self._solarizeadd_magnitude_to_kwargs,
+            "CutOut": self._cutout_magnitude_to_kwargs,
+            "Rotate": self._rotate_magnitude_to_kwargs,
+        }
+
+        transform = getattr(rand_aug, transform_name)
+        kwargs = magnitude_fn_map[transform_name](magnitude)
+        return transform(**kwargs)
+
+    @staticmethod
+    def _apply_random(inputs, fns, n):
+        for i in range(n):
+            transform_idx = tf.random.uniform([], maxval=len(fns), dtype=tf.int32)
+            for j, fn in enumerate(fns):
                 inputs = tf.cond(
                     pred=tf.equal(j, transform_idx),
-                    true_fn=lambda: transform(inputs),
+                    true_fn=lambda: fn(inputs),
                     false_fn=lambda: inputs,
                 )
         return inputs

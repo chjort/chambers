@@ -6,9 +6,6 @@ import tensorflow_addons as tfa
 from tensorflow.keras.layers.experimental import preprocessing
 from tensorflow.python.keras.engine.input_spec import InputSpec
 
-_FILL_VALUE = 128
-_INTERPOLATION_MODE = "nearest"
-
 
 def blend(image1, image2, factor):
     """Blend image1 and image2 using 'factor'.
@@ -353,9 +350,20 @@ class Invert(preprocessing.PreprocessingLayer):
 
 
 class Rotate(preprocessing.PreprocessingLayer):
-    def __init__(self, degrees, name=None, **kwargs):
+    def __init__(
+        self,
+        degrees,
+        interpolation="nearest",
+        fill_mode="constant",
+        fill_value=0.0,
+        name=None,
+        **kwargs
+    ):
         super(Rotate, self).__init__(name=name, **kwargs)
         self.degrees = degrees
+        self.interpolation = interpolation
+        self.fill_mode = fill_mode
+        self.fill_value = fill_value
         self._radians = degrees * math.pi / 180.0
         self.input_spec = InputSpec(ndim=4)
 
@@ -364,9 +372,9 @@ class Rotate(preprocessing.PreprocessingLayer):
         x = tfa.image.rotate(
             inputs,
             radians,
-            interpolation=_INTERPOLATION_MODE,
-            fill_mode="constant",
-            fill_value=_FILL_VALUE,
+            interpolation=self.interpolation,
+            fill_mode=self.fill_mode,
+            fill_value=self.fill_value,
         )
         return x
 
@@ -374,7 +382,12 @@ class Rotate(preprocessing.PreprocessingLayer):
         return input_shape
 
     def get_config(self):
-        config = {"degrees": self.degrees}
+        config = {
+            "degrees": self.degrees,
+            "interpolation": self.interpolation,
+            "fill_mode": self.fill_mode,
+            "fill_value": self.fill_value,
+        }
         base_config = super(Rotate, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
@@ -525,9 +538,20 @@ class Sharpness(preprocessing.PreprocessingLayer):
 
 
 class ShearX(preprocessing.PreprocessingLayer):
-    def __init__(self, level, name=None, **kwargs):
+    def __init__(
+        self,
+        level,
+        interpolation="nearest",
+        fill_mode="constant",
+        fill_value=0.0,
+        name=None,
+        **kwargs
+    ):
         super(ShearX, self).__init__(name=name, **kwargs)
         self.level = level
+        self.interpolation = interpolation
+        self.fill_mode = fill_mode
+        self.fill_value = fill_value
         self.input_spec = InputSpec(ndim=4)
 
     def call(self, inputs, **kwargs):
@@ -535,108 +559,9 @@ class ShearX(preprocessing.PreprocessingLayer):
         x = tfa.image.transform(
             inputs,
             [1.0, level, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0],
-            interpolation=_INTERPOLATION_MODE,
-            fill_mode="constant",
-            fill_value=_FILL_VALUE,
-        )
-        return x
-
-    def compute_output_shape(self, input_shape):
-        return input_shape
-
-    def get_config(self):
-        config = {"level": self.level}
-        base_config = super(ShearX, self).get_config()
-        return dict(list(base_config.items()) + list(config.items()))
-
-
-class ShearY(preprocessing.PreprocessingLayer):
-    def __init__(self, level, name=None, **kwargs):
-        super(ShearY, self).__init__(name=name, **kwargs)
-        self.level = level
-        self.input_spec = InputSpec(ndim=4)
-
-    def call(self, inputs, **kwargs):
-        level = _randomly_negate_value(self.level)
-        x = tfa.image.transform(
-            inputs,
-            [1.0, 0.0, 0.0, level, 1.0, 0.0, 0.0, 0.0],
-            interpolation=_INTERPOLATION_MODE,
-            fill_mode="constant",
-            fill_value=_FILL_VALUE,
-        )
-        return x
-
-    def compute_output_shape(self, input_shape):
-        return input_shape
-
-    def get_config(self):
-        config = {"level": self.level}
-        base_config = super(ShearY, self).get_config()
-        return dict(list(base_config.items()) + list(config.items()))
-
-
-class TranslateX(preprocessing.PreprocessingLayer):
-    def __init__(self, pixels, name=None, **kwargs):
-        super(TranslateX, self).__init__(name=name, **kwargs)
-        self.pixels = pixels
-        self.input_spec = InputSpec(ndim=4)
-
-    def call(self, inputs, **kwargs):
-        pixels = _randomly_negate_value(self.pixels)
-        x = tfa.image.translate(
-            inputs,
-            [-pixels, 0],
-            interpolation=_INTERPOLATION_MODE,
-            fill_mode="constant",
-            fill_value=_FILL_VALUE,
-        )
-        return x
-
-    def compute_output_shape(self, input_shape):
-        return input_shape
-
-    def get_config(self):
-        config = {"pixels": self.pixels}
-        base_config = super(TranslateX, self).get_config()
-        return dict(list(base_config.items()) + list(config.items()))
-
-
-class TranslateY(preprocessing.PreprocessingLayer):
-    def __init__(self, pixels, name=None, **kwargs):
-        super(TranslateY, self).__init__(name=name, **kwargs)
-        self.pixels = pixels
-        self.input_spec = InputSpec(ndim=4)
-
-    def call(self, inputs, **kwargs):
-        pixels = _randomly_negate_value(self.pixels)
-        x = tfa.image.translate(
-            inputs,
-            [0, -pixels],
-            interpolation=_INTERPOLATION_MODE,
-            fill_mode="constant",
-            fill_value=_FILL_VALUE,
-        )
-        return x
-
-    def compute_output_shape(self, input_shape):
-        return input_shape
-
-    def get_config(self):
-        config = {"pixels": self.pixels}
-        base_config = super(TranslateY, self).get_config()
-        return dict(list(base_config.items()) + list(config.items()))
-
-
-class CutOut(preprocessing.PreprocessingLayer):
-    def __init__(self, mask_size, name=None, **kwargs):
-        super(CutOut, self).__init__(name=name, **kwargs)
-        self.mask_size = mask_size
-        self.input_spec = InputSpec(ndim=4)
-
-    def call(self, inputs, **kwargs):
-        x = tfa.image.random_cutout(
-            inputs, mask_size=self.mask_size, constant_values=_FILL_VALUE
+            interpolation=self.interpolation,
+            fill_mode=self.fill_mode,
+            fill_value=self.fill_value,
         )
         return x
 
@@ -645,7 +570,158 @@ class CutOut(preprocessing.PreprocessingLayer):
 
     def get_config(self):
         config = {
-            "mask_size": self.mask_size,
+            "level": self.level,
+            "interpolation": self.interpolation,
+            "fill_mode": self.fill_mode,
+            "fill_value": self.fill_value,
         }
+        base_config = super(ShearX, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
+
+
+class ShearY(preprocessing.PreprocessingLayer):
+    def __init__(
+        self,
+        level,
+        interpolation="nearest",
+        fill_mode="constant",
+        fill_value=0.0,
+        name=None,
+        **kwargs
+    ):
+        super(ShearY, self).__init__(name=name, **kwargs)
+        self.level = level
+        self.interpolation = interpolation
+        self.fill_mode = fill_mode
+        self.fill_value = fill_value
+        self.input_spec = InputSpec(ndim=4)
+
+    def call(self, inputs, **kwargs):
+        level = _randomly_negate_value(self.level)
+        x = tfa.image.transform(
+            inputs,
+            [1.0, 0.0, 0.0, level, 1.0, 0.0, 0.0, 0.0],
+            interpolation=self.interpolation,
+            fill_mode=self.fill_mode,
+            fill_value=self.fill_value,
+        )
+        return x
+
+    def compute_output_shape(self, input_shape):
+        return input_shape
+
+    def get_config(self):
+        config = {
+            "level": self.level,
+            "interpolation": self.interpolation,
+            "fill_mode": self.fill_mode,
+            "fill_value": self.fill_value,
+        }
+        base_config = super(ShearY, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
+
+
+class TranslateX(preprocessing.PreprocessingLayer):
+    def __init__(
+        self,
+        pixels,
+        interpolation="nearest",
+        fill_mode="constant",
+        fill_value=0.0,
+        name=None,
+        **kwargs
+    ):
+        super(TranslateX, self).__init__(name=name, **kwargs)
+        self.pixels = pixels
+        self.interpolation = interpolation
+        self.fill_mode = fill_mode
+        self.fill_value = fill_value
+        self.input_spec = InputSpec(ndim=4)
+
+    def call(self, inputs, **kwargs):
+        pixels = _randomly_negate_value(self.pixels)
+        x = tfa.image.translate(
+            inputs,
+            [-pixels, 0],
+            interpolation=self.interpolation,
+            fill_mode=self.fill_mode,
+            fill_value=self.fill_value,
+        )
+        return x
+
+    def compute_output_shape(self, input_shape):
+        return input_shape
+
+    def get_config(self):
+        config = {
+            "pixels": self.pixels,
+            "interpolation": self.interpolation,
+            "fill_mode": self.fill_mode,
+            "fill_value": self.fill_value,
+        }
+        base_config = super(TranslateX, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
+
+
+class TranslateY(preprocessing.PreprocessingLayer):
+    def __init__(
+        self,
+        pixels,
+        interpolation="nearest",
+        fill_mode="constant",
+        fill_value=0.0,
+        name=None,
+        **kwargs
+    ):
+        super(TranslateY, self).__init__(name=name, **kwargs)
+        self.pixels = pixels
+        self.interpolation = interpolation
+        self.fill_mode = fill_mode
+        self.fill_value = fill_value
+        self.input_spec = InputSpec(ndim=4)
+
+    def call(self, inputs, **kwargs):
+        pixels = _randomly_negate_value(self.pixels)
+        x = tfa.image.translate(
+            inputs,
+            [0, -pixels],
+            interpolation=self.interpolation,
+            fill_mode=self.fill_mode,
+            fill_value=self.fill_value,
+        )
+        return x
+
+    def compute_output_shape(self, input_shape):
+        return input_shape
+
+    def get_config(self):
+        config = {
+            "pixels": self.pixels,
+            "interpolation": self.interpolation,
+            "fill_mode": self.fill_mode,
+            "fill_value": self.fill_value,
+        }
+        base_config = super(TranslateY, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
+
+
+class CutOut(preprocessing.PreprocessingLayer):
+    def __init__(self, mask_size, constant_values=0, name=None, **kwargs):
+        super(CutOut, self).__init__(name=name, **kwargs)
+        self.mask_size = mask_size
+        self.constant_values = constant_values
+        self.input_spec = InputSpec(ndim=4)
+
+    def call(self, inputs, **kwargs):
+        x = tfa.image.random_cutout(
+            inputs, mask_size=self.mask_size, constant_values=self.constant_values
+        )
+        return x
+
+    def compute_output_shape(self, input_shape):
+        return input_shape
+
+    def get_config(self):
+        config = {"mask_size": self.mask_size, "constant_values": self.constant_values}
         base_config = super(CutOut, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))

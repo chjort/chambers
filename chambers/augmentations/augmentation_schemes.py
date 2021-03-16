@@ -4,6 +4,9 @@ from tensorflow.python.keras.engine.input_spec import InputSpec
 
 from chambers.augmentations import image_augmentations
 
+_INTERPOLATION_MODE = "nearest"
+_FILL_MODE = "constant"
+_FILL_VALUE = 128
 _MAX_MAGNITUDE = 10.0
 
 _AUTO_AUGMENT_POLICY_V0 = [
@@ -38,42 +41,65 @@ _AUTO_AUGMENT_POLICY_V0 = [
 
 def _enhance_magnitude_to_kwargs(magnitude):
     factor = magnitude / _MAX_MAGNITUDE * 1.8 + 0.1
-    return {"factor": factor}
+    kwargs = {"factor": factor}
+    return kwargs
 
 
 def _shear_magnitude_to_kwargs(magnitude):
     level = magnitude / _MAX_MAGNITUDE * 0.3
-    return {"level": level}
+    kwargs = {
+        "level": level,
+        "interpolation": _INTERPOLATION_MODE,
+        "fill_mode": _FILL_MODE,
+        "fill_value": _FILL_VALUE,
+    }
+    return kwargs
 
 
 def _translate_magnitude_to_kwargs(magnitude):
     pixels = magnitude / _MAX_MAGNITUDE * 100
-    return {"pixels": pixels}
+    kwargs = {
+        "pixels": pixels,
+        "interpolation": _INTERPOLATION_MODE,
+        "fill_mode": _FILL_MODE,
+        "fill_value": _FILL_VALUE,
+    }
+    return kwargs
 
 
 def _posterize_magnitude_to_kwargs(magnitude):
     bits = int(magnitude / _MAX_MAGNITUDE * 4)
-    return {"bits": bits}
+    kwargs = {"bits": bits}
+    return kwargs
 
 
 def _solarize_magnitude_to_kwargs(magnitude):
     threshold = int(magnitude / _MAX_MAGNITUDE * 256)
-    return {"threshold": threshold}
+    kwargs = {"threshold": threshold}
+    return kwargs
 
 
 def _solarizeadd_magnitude_to_kwargs(magnitude):
     addition = int(magnitude / _MAX_MAGNITUDE * 110)
-    return {"addition": addition}
+    kwargs = {"addition": addition}
+    return kwargs
 
 
 def _rotate_magnitude_to_kwargs(magnitude):
     degrees = magnitude / _MAX_MAGNITUDE * 30.0
-    return {"degrees": degrees}
+    kwargs = {
+        "degrees": degrees,
+        "interpolation": _INTERPOLATION_MODE,
+        "fill_mode": _FILL_MODE,
+        "fill_value": _FILL_VALUE,
+    }
+    return kwargs
 
 
 def _cutout_magnitude_to_kwargs(magnitude):
     mask_size = int(magnitude / _MAX_MAGNITUDE * 80)
-    return {"mask_size": mask_size}
+    kwargs = {"mask_size": mask_size, "constant_values": _FILL_VALUE}
+    return kwargs
 
 
 def _get_transform(transform_name, magnitude):

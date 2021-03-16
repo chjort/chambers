@@ -85,7 +85,7 @@ def _magnitude_to_solarizeadd_kwargs(magnitude):
     return kwargs
 
 
-def _rotate_magnitude_to_kwargs(magnitude):
+def _magnitude_to_rotate_kwargs(magnitude):
     degrees = magnitude / _MAX_MAGNITUDE * 30.0
     kwargs = {
         "degrees": degrees,
@@ -96,7 +96,7 @@ def _rotate_magnitude_to_kwargs(magnitude):
     return kwargs
 
 
-def _cutout_magnitude_to_kwargs(magnitude):
+def _magnitude_to_cutout_kwargs(magnitude):
     mask_size = int(magnitude / _MAX_MAGNITUDE * 80)
     kwargs = {"mask_size": mask_size, "constant_values": _FILL_VALUE}
     return kwargs
@@ -118,8 +118,8 @@ def _get_transform(transform_name, magnitude):
         "Posterize": _magnitude_to_posterize_kwargs,
         "Solarize": _magnitude_to_solarize_kwargs,
         "SolarizeAdd": _magnitude_to_solarizeadd_kwargs,
-        "CutOut": _cutout_magnitude_to_kwargs,
-        "Rotate": _rotate_magnitude_to_kwargs,
+        "CutOut": _magnitude_to_cutout_kwargs,
+        "Rotate": _magnitude_to_rotate_kwargs,
     }
 
     transform = getattr(image_augmentations, transform_name)

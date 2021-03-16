@@ -39,13 +39,13 @@ _AUTO_AUGMENT_POLICY_V0 = [
 ]
 
 
-def _enhance_magnitude_to_kwargs(magnitude):
+def _magnitude_to_enhance_kwargs(magnitude):
     factor = magnitude / _MAX_MAGNITUDE * 1.8 + 0.1
     kwargs = {"factor": factor}
     return kwargs
 
 
-def _shear_magnitude_to_kwargs(magnitude):
+def _magnitude_to_shear_kwargs(magnitude):
     level = magnitude / _MAX_MAGNITUDE * 0.3
     kwargs = {
         "level": level,
@@ -56,7 +56,7 @@ def _shear_magnitude_to_kwargs(magnitude):
     return kwargs
 
 
-def _translate_magnitude_to_kwargs(magnitude):
+def _magnitude_to_translate_kwargs(magnitude):
     pixels = magnitude / _MAX_MAGNITUDE * 100
     kwargs = {
         "pixels": pixels,
@@ -67,19 +67,19 @@ def _translate_magnitude_to_kwargs(magnitude):
     return kwargs
 
 
-def _posterize_magnitude_to_kwargs(magnitude):
+def _magnitude_to_posterize_kwargs(magnitude):
     bits = int(magnitude / _MAX_MAGNITUDE * 4)
     kwargs = {"bits": bits}
     return kwargs
 
 
-def _solarize_magnitude_to_kwargs(magnitude):
+def _magnitude_to_solarize_kwargs(magnitude):
     threshold = int(magnitude / _MAX_MAGNITUDE * 256)
     kwargs = {"threshold": threshold}
     return kwargs
 
 
-def _solarizeadd_magnitude_to_kwargs(magnitude):
+def _magnitude_to_solarizeadd_kwargs(magnitude):
     addition = int(magnitude / _MAX_MAGNITUDE * 110)
     kwargs = {"addition": addition}
     return kwargs
@@ -107,17 +107,17 @@ def _get_transform(transform_name, magnitude):
         "AutoContrast": lambda magnitude: {},
         "Equalize": lambda magnitude: {},
         "Invert": lambda magnitude: {},
-        "Brightness": _enhance_magnitude_to_kwargs,
-        "Contrast": _enhance_magnitude_to_kwargs,
-        "Color": _enhance_magnitude_to_kwargs,
-        "Sharpness": _enhance_magnitude_to_kwargs,
-        "ShearX": _shear_magnitude_to_kwargs,
-        "ShearY": _shear_magnitude_to_kwargs,
-        "TranslateX": _translate_magnitude_to_kwargs,
-        "TranslateY": _translate_magnitude_to_kwargs,
-        "Posterize": _posterize_magnitude_to_kwargs,
-        "Solarize": _solarize_magnitude_to_kwargs,
-        "SolarizeAdd": _solarizeadd_magnitude_to_kwargs,
+        "Brightness": _magnitude_to_enhance_kwargs,
+        "Contrast": _magnitude_to_enhance_kwargs,
+        "Color": _magnitude_to_enhance_kwargs,
+        "Sharpness": _magnitude_to_enhance_kwargs,
+        "ShearX": _magnitude_to_shear_kwargs,
+        "ShearY": _magnitude_to_shear_kwargs,
+        "TranslateX": _magnitude_to_translate_kwargs,
+        "TranslateY": _magnitude_to_translate_kwargs,
+        "Posterize": _magnitude_to_posterize_kwargs,
+        "Solarize": _magnitude_to_solarize_kwargs,
+        "SolarizeAdd": _magnitude_to_solarizeadd_kwargs,
         "CutOut": _cutout_magnitude_to_kwargs,
         "Rotate": _rotate_magnitude_to_kwargs,
     }

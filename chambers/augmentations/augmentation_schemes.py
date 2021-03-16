@@ -146,7 +146,7 @@ class AutoAugment(preprocessing.PreprocessingLayer):
         self._transform = image_augmentations.RandomChoice(
             self.transforms, n_transforms=1, elementwise=elementwise
         )
-        self.input_spec = InputSpec(ndim=4)
+        self.input_spec = InputSpec(ndim=4, dtype=tf.uint8)
 
     def call(self, inputs, **kwargs):
         return self._transform(inputs)
@@ -156,7 +156,7 @@ class AutoAugment(preprocessing.PreprocessingLayer):
 
     def get_config(self):
         config = {
-            "separate": self.elementwise,
+            "elementwise": self.elementwise,
         }
         base_config = super(AutoAugment, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
@@ -189,7 +189,7 @@ class RandAugment(preprocessing.PreprocessingLayer):
         self._transform = image_augmentations.RandomChoice(
             self.transforms, n_transforms=n_transforms, elementwise=elementwise
         )
-        self.input_spec = InputSpec(ndim=4)
+        self.input_spec = InputSpec(ndim=4, dtype=tf.uint8)
 
     def call(self, inputs, **kwargs):
         return self._transform(inputs)
@@ -201,7 +201,7 @@ class RandAugment(preprocessing.PreprocessingLayer):
         config = {
             "n_transforms": self.n_transforms,
             "magnitude": self.magnitude,
-            "separate": self.elementwise,
+            "elementwise": self.elementwise,
         }
         base_config = super(RandAugment, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))

@@ -137,7 +137,8 @@ class RandomChoice(preprocessing.PreprocessingLayer):
             "transforms": [
                 tf.keras.layers.serialize(transform) for transform in self.transforms
             ],
-            "probability": self.probability,
+            "n_transforms": self.n_transforms,
+            "elementwise": self.elementwise,
         }
         base_config = super(RandomChoice, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))

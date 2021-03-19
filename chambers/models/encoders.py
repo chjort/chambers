@@ -1,6 +1,4 @@
 from tensorflow.keras.layers import (
-    Flatten,
-    Input,
     GlobalAveragePooling2D,
     GlobalMaxPooling2D,
     Dense,
@@ -8,8 +6,9 @@ from tensorflow.keras.layers import (
 from tensorflow.keras.models import Model
 
 from .backbones import ResNet50_ImageNet, BN_Inception_ImageNet
-from ..layers import ConvBlock, GlobalGeneralizedMean, L2Normalization
 from ..layers.descriptors import RMAC
+from ..layers.normalization import L2Normalization
+from ..layers.pooling import GlobalGeneralizedMean
 from ..layers.reduce import Sum
 from ..utils.generic import deserialize_object
 
@@ -77,26 +76,6 @@ def ResNet50_GeM(input_shape=None, freeze_layers=False):
     x = L2Normalization(axis=1)(x)
 
     model = Model(inputs=resnet.input, outputs=x, name="ResNet50_GeM")
-
-    return model
-
-
-def CNN64(input_shape=None):
-    """
-    A Convolutional Neural Network comprised of four convolutional blocks.
-    In each block an input is passed through Conv2D, Batch Normalization, ReLU activation, and Max-pooling
-
-    """
-    if input_shape is None:
-        input_shape = (None, None, 3)
-
-    input_ = Input(shape=input_shape)
-    x = ConvBlock(filters=64, conv_size=(3, 3))(input_)
-    x = ConvBlock(filters=64, conv_size=(3, 3))(x)
-    x = ConvBlock(filters=64, conv_size=(3, 3))(x)
-    x = ConvBlock(filters=64, conv_size=(3, 3))(x)
-    x = Flatten()(x)
-    model = Model(inputs=input_, outputs=x, name="cnn")
 
     return model
 

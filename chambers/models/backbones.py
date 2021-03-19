@@ -1,5 +1,4 @@
 import tensorflow as tf
-import keras_applications
 
 
 def BN_Inception_ImageNet(input_shape=None, freeze_layers=False):
@@ -49,40 +48,6 @@ def ResNet101_ImageNet(input_shape=None, freeze_layers=False, include_top=False)
     """
     model = tf.keras.applications.ResNet101(
         input_shape=input_shape, weights="imagenet", include_top=include_top
-    )
-    if freeze_layers:
-        for layer in model.layers:
-            layer.trainable = False
-
-    return model
-
-
-def ResNext50_ImageNet(input_shape=None, freeze_layers=False, include_top=False):
-    model = keras_applications.resnext.ResNeXt50(
-        input_shape=input_shape,
-        weights="imagenet",
-        include_top=include_top,
-        backend=tf.keras.backend,
-        layers=tf.keras.layers,
-        models=tf.keras.models,
-        utils=tf.keras.utils,
-    )
-    if freeze_layers:
-        for layer in model.layers:
-            layer.trainable = False
-
-    return model
-
-
-def ResNext101_ImageNet(input_shape=None, freeze_layers=False, include_top=False):
-    model = keras_applications.resnext.ResNeXt101(
-        input_shape=input_shape,
-        weights="imagenet",
-        include_top=include_top,
-        backend=tf.keras.backend,
-        layers=tf.keras.layers,
-        models=tf.keras.models,
-        utils=tf.keras.utils,
     )
     if freeze_layers:
         for layer in model.layers:

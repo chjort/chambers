@@ -7,7 +7,13 @@ from ..miners import MultiSimilarityMiner as _MSMiner
 
 
 class PairBasedLoss(tf.keras.losses.Loss, abc.ABC):
-    def __init__(self, ignore_diag=True, ignore_negative_labels=True, miner=None, name="pair_based_loss"):
+    def __init__(
+        self,
+        ignore_diag=True,
+        ignore_negative_labels=True,
+        miner=None,
+        name="pair_based_loss",
+    ):
         """
         :param ignore_diag: If True the diagonal pairs of the similarity matrix will be ignored.
         :param ignore_negative_labels: If True loss will not be computed for samples with negative labels will be ignored.
@@ -32,7 +38,9 @@ class PairBasedLoss(tf.keras.losses.Loss, abc.ABC):
         similarity_matrix = self.compute_similarity_matrix(y_pred)
 
         # split similarity matrix into similarites for positive pairs and similarities for negative pairs
-        positive_pairs, negative_pairs = self.get_signed_pairs(similarity_matrix, y_true)
+        positive_pairs, negative_pairs = self.get_signed_pairs(
+            similarity_matrix, y_true
+        )
 
         if self.miner is not None:
             # Mine for informative pairs
@@ -50,8 +58,9 @@ class PairBasedLoss(tf.keras.losses.Loss, abc.ABC):
         """
         return tf.matmul(y_pred, y_pred, transpose_b=True)
 
-    def get_signed_pairs(self, similarity_matrix: tf.Tensor, y_true: tf.Tensor) -> \
-            Tuple[tf.RaggedTensor, tf.RaggedTensor]:
+    def get_signed_pairs(
+        self, similarity_matrix: tf.Tensor, y_true: tf.Tensor
+    ) -> Tuple[tf.RaggedTensor, tf.RaggedTensor]:
         """
 
         :param similarity_matrix: The similarity scores between the embeddings as A 2D Tensor of shape
@@ -77,19 +86,23 @@ class PairBasedLoss(tf.keras.losses.Loss, abc.ABC):
             neg_pair_mask = neg_pair_mask * inverse_eye
 
         # get similarities of positive pairs
-        pos_mat = tf.RaggedTensor.from_row_lengths(values=similarity_matrix[tf.cast(pos_pair_mask, tf.bool)],
-                                                   row_lengths=tf.reduce_sum(pos_pair_mask, axis=1)
-                                                   )
+        pos_mat = tf.RaggedTensor.from_row_lengths(
+            values=similarity_matrix[tf.cast(pos_pair_mask, tf.bool)],
+            row_lengths=tf.reduce_sum(pos_pair_mask, axis=1),
+        )
 
         # get similarities of negative pairs
-        neg_mat = tf.RaggedTensor.from_row_lengths(values=similarity_matrix[tf.cast(neg_pair_mask, tf.bool)],
-                                                   row_lengths=tf.reduce_sum(neg_pair_mask, axis=1)
-                                                   )
+        neg_mat = tf.RaggedTensor.from_row_lengths(
+            values=similarity_matrix[tf.cast(neg_pair_mask, tf.bool)],
+            row_lengths=tf.reduce_sum(neg_pair_mask, axis=1),
+        )
 
         return pos_mat, neg_mat
 
     @abc.abstractmethod
-    def compute_loss(self, positive_pairs: tf.RaggedTensor, negative_pairs: tf.RaggedTensor):
+    def compute_loss(
+        self, positive_pairs: tf.RaggedTensor, negative_pairs: tf.RaggedTensor
+    ):
         """
         Computes the total loss given the positive pair similarities and negative pair similarities.
         :param positive_pairs: Positive pairs as a 2D RaggedTensor with shape [n, 0... n].
@@ -110,25 +123,60 @@ class MultiSimilarityLoss(PairBasedLoss):
     https://arxiv.org/abs/1904.06627
     """
 
-    def __init__(self, pos_scale=2.0, neg_scale=40.0, threshold=0.5, ignore_diag=True, ignore_negative_labels=True,
-                 miner=_MSMiner(margin=0.1), name="multi_similarity_loss"):
-        super().__init__(ignore_diag=ignore_diag, ignore_negative_labels=ignore_negative_labels, miner=miner, name=name)
+    def __init__(
+        self,
+        pos_scale=2.0,
+        neg_scale=40.0,
+        threshold=0.5,
+        ignore_diag=True,
+        ignore_negative_labels=True,
+        miner=_MSMiner(margin=0.1),
+        name="multi_similarity_loss",
+    ):
+        super().__init__(
+            ignore_diag=ignore_diag,
+            ignore_negative_labels=ignore_negative_labels,
+            miner=miner,
+            name=name,
+        )
         self.pos_scale = pos_scale  # alpha
         self.neg_scale = neg_scale  # beta
         self.threshold = threshold  # lambda
 
     def compute_loss(self, positive_pairs, negative_pairs):
-        pos_loss = tf.math.log(
-            1 + tf.reduce_sum(tf.exp(-self.pos_scale * (positive_pairs - self.threshold)), axis=1)) / self.pos_scale
-        neg_loss = tf.math.log(
-            1 + tf.reduce_sum(tf.exp(self.neg_scale * (negative_pairs - self.threshold)), axis=1)) / self.neg_scale
+        pos_loss = (
+            tf.math.log(
+                1
+                + tf.reduce_sum(
+                    tf.exp(-self.pos_scale * (positive_pairs - self.threshold)), axis=1
+                )
+            )
+            / self.pos_scale
+        )
+        neg_loss = (
+            tf.math.log(
+                1
+                + tf.reduce_sum(
+                    tf.exp(self.neg_scale * (negative_pairs - self.threshold)), axis=1
+                )
+            )
+            / self.neg_scale
+        )
 
         return pos_loss + neg_loss
 
 
 class ContrastiveLoss(PairBasedLoss):
-    def __init__(self, positive_margin=1., negative_margin=0.3, exponent=2, ignore_diag=True,
-                 ignore_negative_labels=True, miner=None, name="contrastive_loss"):
+    def __init__(
+        self,
+        positive_margin=1.0,
+        negative_margin=0.3,
+        exponent=2,
+        ignore_diag=True,
+        ignore_negative_labels=True,
+        miner=None,
+        name="contrastive_loss",
+    ):
         """
 
         :param positive_margin: The margin that the similarity of positive pairs at least should be to not contribute
@@ -137,18 +185,30 @@ class ContrastiveLoss(PairBasedLoss):
         loss
         :param exponent: The exponent which the losses are raised to the power of.
         """
-        super().__init__(ignore_diag=ignore_diag, ignore_negative_labels=ignore_negative_labels, miner=miner, name=name)
+        super().__init__(
+            ignore_diag=ignore_diag,
+            ignore_negative_labels=ignore_negative_labels,
+            miner=miner,
+            name=name,
+        )
         self.positive_margin = positive_margin
         self.negative_margin = negative_margin
         self.exponent = exponent
 
-    def compute_loss(self, positive_pairs: tf.RaggedTensor, negative_pairs: tf.RaggedTensor):
+    def compute_loss(
+        self, positive_pairs: tf.RaggedTensor, negative_pairs: tf.RaggedTensor
+    ):
         # if positive pair similarity is lower than the positive margin, it contributes to the loss
-        pos_pairs_loss = tf.pow(self.positive_margin - positive_pairs, self.exponent) / self.exponent
+        pos_pairs_loss = (
+            tf.pow(self.positive_margin - positive_pairs, self.exponent) / self.exponent
+        )
         pos_loss = tf.reduce_sum(pos_pairs_loss, axis=1)
 
         # if negative pair similarity is larger than the negative margin, it contributes to the loss
-        neg_pairs_loss = tf.pow(tf.maximum(0, negative_pairs - self.negative_margin), self.exponent) / self.exponent
+        neg_pairs_loss = (
+            tf.pow(tf.maximum(0, negative_pairs - self.negative_margin), self.exponent)
+            / self.exponent
+        )
         neg_loss = tf.reduce_sum(neg_pairs_loss, axis=1)
 
         return pos_loss + neg_loss
@@ -165,7 +225,9 @@ class NTXentLoss(tf.keras.losses.Loss):
         n = tf.shape(y_pred)[0]
 
         similarity_matrix = self.compute_similarity_matrix(y_pred) / self.temperature
-        similarity_matrix = tf.linalg.set_diag(similarity_matrix, tf.fill([n], -1e9))  # mask mirror pairs
+        similarity_matrix = tf.linalg.set_diag(
+            similarity_matrix, tf.fill([n], -1e9)
+        )  # mask mirror pairs
 
         y_true = tf.reshape(y_true, [-1, 1])
         y_true = tf.cast(tf.equal(y_true, tf.transpose(y_true)), tf.int32)
@@ -182,6 +244,85 @@ class NTXentLoss(tf.keras.losses.Loss):
         """
         return tf.matmul(y_pred, y_pred, transpose_b=True)
 
+
 # class NewLoss(PairBasedLoss):
 #     def __init__(self, ignore_diag=True, ignore_negative_labels=True, miner=None, name=None):
 #         super().__init__(ignore_diag=ignore_diag, ignore_negative_labels=ignore_negative_labels, miner=miner, name=name)
+
+
+def _arcface_logits(y_true, y_pred, cos_m, sin_m, mm, threshold, scale=64.0):
+    cos_t = y_pred
+    sin_t = tf.sqrt(1.0 - cos_t ** 2)
+
+    cos_mt = (cos_t * cos_m) - (sin_t * sin_m)
+    cos_mt = tf.where(cos_t > threshold, cos_mt, cos_t - mm)
+
+    y_true = tf.cast(y_true, y_pred.dtype)
+    logits = (cos_mt * y_true) + (cos_t * (1 - y_true))
+    logits = logits * scale
+    return logits
+
+
+class ArcFace(tf.keras.losses.CategoricalCrossentropy):
+    def __init__(
+        self,
+        scale=64.0,
+        margin=0.5,
+        reduction=tf.keras.losses.Reduction.AUTO,
+        name=None,
+    ):
+        super(ArcFace, self).__init__(from_logits=True, reduction=reduction, name=name)
+        self.scale = scale
+        self.margin = margin
+
+        self._cos_m = tf.cos(margin)
+        self._sin_m = tf.sin(margin)
+        self._mm = self._sin_m * margin
+        self._threshold = tf.cos(3.141592653589793 - margin)
+
+    def call(self, y_true, y_pred):
+        logits = _arcface_logits(
+            y_true,
+            y_pred,
+            cos_m=self._cos_m,
+            sin_m=self._sin_m,
+            mm=self._mm,
+            threshold=self._threshold,
+            scale=self.scale,
+        )
+        return super(ArcFace, self).call(y_true, logits)
+
+
+class SparseArcFace(tf.keras.losses.SparseCategoricalCrossentropy):
+    def __init__(
+        self,
+        scale=64.0,
+        margin=0.5,
+        reduction=tf.keras.losses.Reduction.AUTO,
+        name=None,
+    ):
+        super(SparseArcFace, self).__init__(
+            from_logits=True, reduction=reduction, name=name
+        )
+        self.scale = scale
+        self.margin = margin
+
+        self._cos_m = tf.cos(margin)
+        self._sin_m = tf.sin(margin)
+        self._mm = self._sin_m * margin
+        self._threshold = tf.cos(3.141592653589793 - margin)
+
+    def call(self, y_true, y_pred):
+        n_classes = tf.shape(y_pred)[-1]
+        y_true_1hot = tf.cast(tf.reshape(y_true, [-1]), tf.int32)
+        y_true_1hot = tf.one_hot(y_true_1hot, depth=n_classes)
+        logits = _arcface_logits(
+            y_true_1hot,
+            y_pred,
+            cos_m=self._cos_m,
+            sin_m=self._sin_m,
+            mm=self._mm,
+            threshold=self._threshold,
+            scale=self.scale,
+        )
+        return super(SparseArcFace, self).call(y_true, logits)

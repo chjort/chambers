@@ -6,7 +6,7 @@ def extract_features(dataset, model):
     features = []
     labels = []
     for x, y in dataset:
-        feat = model(x)
+        feat = model(x, training=False)
         features.append(feat)
         labels.append(y)
 

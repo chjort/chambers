@@ -23,6 +23,7 @@ class GlobalRankingMetricCallback(tf.keras.callbacks.Callback):
         self.feature_dim = feature_dim
         self.index = None
         self.use_gpu = use_gpu
+        self._supports_tf_logs = True
 
     def on_train_begin(self, logs=None):
         self.index = self._build_index()
@@ -36,9 +37,8 @@ class GlobalRankingMetricCallback(tf.keras.callbacks.Callback):
 
         for i, metric_fn in enumerate(self.metric_funcs):
             metric_name = "{}".format(metric_fn.__name__)
-            metric_score = metric_fn(binary_ranking).numpy()
+            metric_score = metric_fn(binary_ranking)
             logs[metric_name] = metric_score
-            print(" - {}:".format(metric_name), np.round(metric_score, 4), end="", flush=True)
 
         self.index.reset()
 

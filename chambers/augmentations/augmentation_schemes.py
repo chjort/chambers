@@ -3,6 +3,7 @@ from tensorflow.keras.layers.experimental import preprocessing
 from tensorflow.python.keras.engine.input_spec import InputSpec
 
 from chambers.augmentations import image_augmentations
+from tensorflow.python.keras.utils import tf_utils
 
 _INTERPOLATION_MODE = "nearest"
 _FILL_MODE = "constant"
@@ -128,6 +129,7 @@ def _get_transform(transform_name, magnitude):
     return transform(**kwargs)
 
 
+@tf.keras.utils.register_keras_serializable(package="Chambers")
 class AutoAugment(preprocessing.PreprocessingLayer):
     """ Applies a random augmentation pair to each image """
 
@@ -148,8 +150,16 @@ class AutoAugment(preprocessing.PreprocessingLayer):
         )
         self.input_spec = InputSpec(ndim=4, dtype=tf.uint8)
 
-    def call(self, inputs, **kwargs):
-        return self._transform(inputs)
+    def call(self, inputs, training=None, **kwargs):
+        if training is None:
+            training = tf.keras.backend.learning_phase()
+
+        x = tf_utils.smart_cond(
+            pred=training,
+            true_fn=lambda: self._transform(inputs),
+            false_fn=lambda: inputs,
+        )
+        return x
 
     def compute_output_shape(self, input_shape):
         return input_shape
@@ -162,6 +172,7 @@ class AutoAugment(preprocessing.PreprocessingLayer):
         return dict(list(base_config.items()) + list(config.items()))
 
 
+@tf.keras.utils.register_keras_serializable(package="Chambers")
 class RandAugment(preprocessing.PreprocessingLayer):
     def __init__(self, n_transforms, magnitude, elementwise=False, name=None, **kwargs):
         super(RandAugment, self).__init__(name=name, **kwargs)
@@ -191,8 +202,16 @@ class RandAugment(preprocessing.PreprocessingLayer):
         )
         self.input_spec = InputSpec(ndim=4, dtype=tf.uint8)
 
-    def call(self, inputs, **kwargs):
-        return self._transform(inputs)
+    def call(self, inputs, training=None, **kwargs):
+        if training is None:
+            training = tf.keras.backend.learning_phase()
+
+        x = tf_utils.smart_cond(
+            pred=training,
+            true_fn=lambda: self._transform(inputs),
+            false_fn=lambda: inputs,
+        )
+        return x
 
     def compute_output_shape(self, input_shape):
         return input_shape

@@ -13,6 +13,7 @@ class PairBasedLoss(tf.keras.losses.Loss, abc.ABC):
         ignore_negative_labels=True,
         miner=None,
         name="pair_based_loss",
+        **kwargs,
     ):
         """
         :param ignore_diag: If True the diagonal pairs of the similarity matrix will be ignored.
@@ -20,7 +21,7 @@ class PairBasedLoss(tf.keras.losses.Loss, abc.ABC):
         :param miner: The miner to use for sample mining
         :param name: Name of the loss function.
         """
-        super().__init__(name=name)
+        super().__init__(name=name, **kwargs)
         self.ignore_diag = ignore_diag
         self.ignore_negative_labels = ignore_negative_labels
         self.miner = miner
@@ -112,6 +113,7 @@ class PairBasedLoss(tf.keras.losses.Loss, abc.ABC):
         pass
 
 
+@tf.keras.utils.register_keras_serializable(package="Chambers")
 class MultiSimilarityLoss(PairBasedLoss):
     """
     Multi-similarity loss
@@ -132,12 +134,14 @@ class MultiSimilarityLoss(PairBasedLoss):
         ignore_negative_labels=True,
         miner=_MSMiner(margin=0.1),
         name="multi_similarity_loss",
+        **kwargs,
     ):
         super().__init__(
             ignore_diag=ignore_diag,
             ignore_negative_labels=ignore_negative_labels,
             miner=miner,
             name=name,
+            **kwargs,
         )
         self.pos_scale = pos_scale  # alpha
         self.neg_scale = neg_scale  # beta
@@ -166,6 +170,7 @@ class MultiSimilarityLoss(PairBasedLoss):
         return pos_loss + neg_loss
 
 
+@tf.keras.utils.register_keras_serializable(package="Chambers")
 class ContrastiveLoss(PairBasedLoss):
     def __init__(
         self,
@@ -176,6 +181,7 @@ class ContrastiveLoss(PairBasedLoss):
         ignore_negative_labels=True,
         miner=None,
         name="contrastive_loss",
+        **kwargs,
     ):
         """
 
@@ -190,6 +196,7 @@ class ContrastiveLoss(PairBasedLoss):
             ignore_negative_labels=ignore_negative_labels,
             miner=miner,
             name=name,
+            **kwargs,
         )
         self.positive_margin = positive_margin
         self.negative_margin = negative_margin
@@ -214,9 +221,10 @@ class ContrastiveLoss(PairBasedLoss):
         return pos_loss + neg_loss
 
 
+@tf.keras.utils.register_keras_serializable(package="Chambers")
 class NTXentLoss(tf.keras.losses.Loss):
-    def __init__(self, temperature=1.0, from_logits=False, name=None):
-        super().__init__(name=name)
+    def __init__(self, temperature=1.0, from_logits=False, name=None, **kwargs):
+        super().__init__(name=name, **kwargs)
         self.temperature = temperature
         self.from_logits = from_logits
         self.ce = tf.keras.losses.CategoricalCrossentropy(from_logits=from_logits)

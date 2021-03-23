@@ -5,6 +5,7 @@ from tensorflow.keras.layers import Layer
 from tensorflow.python.keras.layers.pooling import GlobalPooling2D
 
 
+@tf.keras.utils.register_keras_serializable(package="Chambers")
 class GlobalGeneralizedMean(GlobalPooling2D):
     """
     Global Generalized Mean layer for spatial inputs
@@ -34,6 +35,7 @@ class GlobalGeneralizedMean(GlobalPooling2D):
                 p_shape = input_shape[1]
 
         self.p = self.add_weight(
+            name="p",
             shape=[p_shape],
             initializer=initializers.constant(self._p_init),
             trainable=self.trainable,

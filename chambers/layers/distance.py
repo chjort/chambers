@@ -1,6 +1,7 @@
 import tensorflow as tf
 
 # TODO Make a base distance layer.
+@tf.keras.utils.register_keras_serializable(package="Chambers")
 class L1Distance(tf.keras.layers.Layer):
     """
     L1 distance or "Manhattan-distance" layer
@@ -24,7 +25,7 @@ class L1Distance(tf.keras.layers.Layer):
         x = tf.abs(x)
         if self.sum:
             x = tf.reduce_sum.sum(x, axis=self.axis, keepdims=self.keepdims)
-        return tf.reduce_max(x, tf.keras.backend.epsilon())
+        return x
 
     def get_config(self):
         config = {"sum": self.sum, "axis": self.axis, "keepdims": self.keepdims}
@@ -32,6 +33,7 @@ class L1Distance(tf.keras.layers.Layer):
         return dict(list(base_config.items()) + list(config.items()))
 
 
+@tf.keras.utils.register_keras_serializable(package="Chambers")
 class CosineDistance(tf.keras.layers.Layer):
     """
     Cosine distance layer
@@ -59,7 +61,7 @@ class CosineDistance(tf.keras.layers.Layer):
         if self.sum:
             x = tf.reduce_sum(x, axis=self.axis, keepdims=self.keepdims)
         dist = 1 - x
-        return tf.reduce_max(dist, tf.keras.backend.epsilon())
+        return dist
 
     def get_config(self):
         config = {"sum": self.sum, "axis": self.axis, "keepdims": self.keepdims}
@@ -67,6 +69,7 @@ class CosineDistance(tf.keras.layers.Layer):
         return dict(list(base_config.items()) + list(config.items()))
 
 
+@tf.keras.utils.register_keras_serializable(package="Chambers")
 class L2Distance(tf.keras.layers.Layer):
     """
     L2 distance layer. Also knows as Euclidean distance.
@@ -85,13 +88,13 @@ class L2Distance(tf.keras.layers.Layer):
         self.keepdims = keepdims
 
     def call(self, inputs, **kwargs):
-        # v1, v2 = inputs
-        x = tf.keras.layers.Subtract()(inputs)
+        v1, v2 = inputs
+        x = v1 - v2
         x = tf.square(x)
         if self.sum:
             x = tf.reduce_sum(x, axis=self.axis, keepdims=self.keepdims)
         x = tf.sqrt(x)
-        return tf.reduce_max(x, tf.keras.backend.epsilon())
+        return x
 
     def get_config(self):
         config = {"sum": self.sum, "axis": self.axis, "keepdims": self.keepdims}

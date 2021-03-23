@@ -1,6 +1,7 @@
 import tensorflow as tf
 
 
+@tf.keras.utils.register_keras_serializable(package="Chambers")
 class L2Normalization(tf.keras.layers.Layer):
     """
     L2-Normalization layer

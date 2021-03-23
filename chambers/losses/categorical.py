@@ -45,6 +45,7 @@ def _arcface_logits(y_true, y_pred, cos_m, sin_m, mm, threshold, scale=64.0):
     return logits
 
 
+@tf.keras.utils.register_keras_serializable(package="Chambers")
 class ArcFace(tf.keras.losses.CategoricalCrossentropy):
     def __init__(
         self,
@@ -75,6 +76,7 @@ class ArcFace(tf.keras.losses.CategoricalCrossentropy):
         return super(ArcFace, self).call(y_true, logits)
 
 
+@tf.keras.utils.register_keras_serializable(package="Chambers")
 class SparseArcFace(tf.keras.losses.SparseCategoricalCrossentropy):
     def __init__(
         self,

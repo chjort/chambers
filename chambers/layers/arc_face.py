@@ -1,6 +1,7 @@
 import tensorflow as tf
 
 
+@tf.keras.utils.register_keras_serializable(package="Chambers")
 class ArcFaceHead(tf.keras.layers.Layer):
     def __init__(self, n_classes, name=None, **kwargs):
         super(ArcFaceHead, self).__init__(name=name, **kwargs)
@@ -16,3 +17,8 @@ class ArcFaceHead(tf.keras.layers.Layer):
 
         cos_t = tf.matmul(x_norm, w_norm)
         return cos_t
+
+    def get_config(self):
+        config = {"n_classes": self.n_classes}
+        base_config = super().get_config()
+        return dict(list(base_config.items()) + list(config.items()))

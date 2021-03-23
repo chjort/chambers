@@ -7,12 +7,23 @@ from ..miners import MultiSimilarityMiner as _MSMiner
 
 
 class PairBasedLoss(tf.keras.losses.Loss, abc.ABC):
-    def __init__(self, miner=None, name="pair_based_loss"):
+    def __init__(
+        self,
+        ignore_diag=True,
+        ignore_negative_labels=True,
+        miner=None,
+        name="pair_based_loss",
+        **kwargs,
+    ):
         """
+        :param ignore_diag: If True the diagonal pairs of the similarity matrix will be ignored.
+        :param ignore_negative_labels: If True loss will not be computed for samples with negative labels will be ignored.
         :param miner: The miner to use for sample mining
         :param name: Name of the loss function.
         """
-        super().__init__(name=name)
+        super().__init__(name=name, **kwargs)
+        self.ignore_diag = ignore_diag
+        self.ignore_negative_labels = ignore_negative_labels
         self.miner = miner
 
     def call(self, y_true, y_pred) -> tf.Tensor:
@@ -29,7 +40,7 @@ class PairBasedLoss(tf.keras.losses.Loss, abc.ABC):
 
         # split similarity matrix into similarites for positive pairs and similarities for negative pairs
         positive_pairs, negative_pairs = self.get_signed_pairs(
-            similarity_matrix, y_true, ignore_diag=True
+            similarity_matrix, y_true
         )
 
         if self.miner is not None:
@@ -46,40 +57,45 @@ class PairBasedLoss(tf.keras.losses.Loss, abc.ABC):
         :param y_pred: The embeddings as a Tensor with shape [n, embedding dimension].
         :return: The similarity scores as a 2D Tensor with shape [n, n]
         """
-        return tf.matmul(y_pred, tf.transpose(y_pred))
+        return tf.matmul(y_pred, y_pred, transpose_b=True)
 
     def get_signed_pairs(
-        self, similarity_matrix: tf.Tensor, y_true: tf.Tensor, ignore_diag: bool = True
+        self, similarity_matrix: tf.Tensor, y_true: tf.Tensor
     ) -> Tuple[tf.RaggedTensor, tf.RaggedTensor]:
         """
 
         :param similarity_matrix: The similarity scores between the embeddings as A 2D Tensor of shape
                 [n, n].
         :param y_true: The class labels for the embeddings as a Tensor with shape [n].
-        :param ignore_diag: If True the diagonal pairs of the similarity matrix will be ignored.
         :return: Positive pairs and negative pairs as a tuple of 2D RaggedTensors each with shape [n, 0... n].
         """
         y_true = tf.reshape(y_true, [-1, 1])
-        pos_pair_mask = tf.equal(y_true, tf.transpose(y_true))
-        neg_pair_mask = tf.logical_not(pos_pair_mask)
+        pos_pair_mask = tf.cast(tf.equal(y_true, tf.transpose(y_true)), tf.int32)
+        neg_pair_mask = 1 - pos_pair_mask
 
-        if ignore_diag:
+        if self.ignore_negative_labels:
+            not_triplet_neg = tf.cast(tf.greater_equal(y_true, 0), tf.int32)
+            pos_pair_mask = pos_pair_mask * not_triplet_neg
+            neg_pair_mask = neg_pair_mask * not_triplet_neg
+
+        if self.ignore_diag:
             # ignore mirror pairs
-            diag_len = tf.shape(similarity_matrix)[0]
-            diag_val = tf.tile([False], [diag_len])
-            pos_pair_mask = tf.linalg.set_diag(pos_pair_mask, diag_val)
-            neg_pair_mask = tf.linalg.set_diag(neg_pair_mask, diag_val)
+            nrows = tf.shape(similarity_matrix)[0]
+            ncols = tf.shape(similarity_matrix)[1]
+            inverse_eye = 1 - tf.eye(nrows, ncols, dtype=tf.int32)
+            pos_pair_mask = pos_pair_mask * inverse_eye
+            neg_pair_mask = neg_pair_mask * inverse_eye
 
         # get similarities of positive pairs
         pos_mat = tf.RaggedTensor.from_row_lengths(
-            values=similarity_matrix[pos_pair_mask],
-            row_lengths=tf.reduce_sum(tf.cast(pos_pair_mask, tf.int32), axis=1),
+            values=similarity_matrix[tf.cast(pos_pair_mask, tf.bool)],
+            row_lengths=tf.reduce_sum(pos_pair_mask, axis=1),
         )
 
         # get similarities of negative pairs
         neg_mat = tf.RaggedTensor.from_row_lengths(
-            values=similarity_matrix[neg_pair_mask],
-            row_lengths=tf.reduce_sum(tf.cast(neg_pair_mask, tf.int32), axis=1),
+            values=similarity_matrix[tf.cast(neg_pair_mask, tf.bool)],
+            row_lengths=tf.reduce_sum(neg_pair_mask, axis=1),
         )
 
         return pos_mat, neg_mat
@@ -97,6 +113,7 @@ class PairBasedLoss(tf.keras.losses.Loss, abc.ABC):
         pass
 
 
+@tf.keras.utils.register_keras_serializable(package="Chambers")
 class MultiSimilarityLoss(PairBasedLoss):
     """
     Multi-similarity loss
@@ -113,10 +130,19 @@ class MultiSimilarityLoss(PairBasedLoss):
         pos_scale=2.0,
         neg_scale=40.0,
         threshold=0.5,
+        ignore_diag=True,
+        ignore_negative_labels=True,
         miner=_MSMiner(margin=0.1),
         name="multi_similarity_loss",
+        **kwargs,
     ):
-        super().__init__(miner=miner, name=name)
+        super().__init__(
+            ignore_diag=ignore_diag,
+            ignore_negative_labels=ignore_negative_labels,
+            miner=miner,
+            name=name,
+            **kwargs,
+        )
         self.pos_scale = pos_scale  # alpha
         self.neg_scale = neg_scale  # beta
         self.threshold = threshold  # lambda
@@ -144,14 +170,18 @@ class MultiSimilarityLoss(PairBasedLoss):
         return pos_loss + neg_loss
 
 
+@tf.keras.utils.register_keras_serializable(package="Chambers")
 class ContrastiveLoss(PairBasedLoss):
     def __init__(
         self,
         positive_margin=1.0,
         negative_margin=0.3,
         exponent=2,
+        ignore_diag=True,
+        ignore_negative_labels=True,
         miner=None,
         name="contrastive_loss",
+        **kwargs,
     ):
         """
 
@@ -161,7 +191,13 @@ class ContrastiveLoss(PairBasedLoss):
         loss
         :param exponent: The exponent which the losses are raised to the power of.
         """
-        super().__init__(miner=miner, name=name)
+        super().__init__(
+            ignore_diag=ignore_diag,
+            ignore_negative_labels=ignore_negative_labels,
+            miner=miner,
+            name=name,
+            **kwargs,
+        )
         self.positive_margin = positive_margin
         self.negative_margin = negative_margin
         self.exponent = exponent
@@ -185,19 +221,38 @@ class ContrastiveLoss(PairBasedLoss):
         return pos_loss + neg_loss
 
 
-class NTXentLoss(PairBasedLoss):
-    def __init__(self, temperature, miner=None, name=None):
-        super().__init__(miner=miner, name=name)
+@tf.keras.utils.register_keras_serializable(package="Chambers")
+class NTXentLoss(tf.keras.losses.Loss):
+    def __init__(self, temperature=1.0, from_logits=False, name=None, **kwargs):
+        super().__init__(name=name, **kwargs)
         self.temperature = temperature
+        self.from_logits = from_logits
+        self.ce = tf.keras.losses.CategoricalCrossentropy(from_logits=from_logits)
 
-    def compute_loss(
-        self, positive_pairs: tf.RaggedTensor, negative_pairs: tf.RaggedTensor
-    ):
+    def call(self, y_true, y_pred):
+        n = tf.shape(y_pred)[0]
 
-        # loss = tf.nn.softmax_cross_entropy_with_logits()
-        raise NotImplementedError()
+        similarity_matrix = self.compute_similarity_matrix(y_pred) / self.temperature
+        similarity_matrix = tf.linalg.set_diag(
+            similarity_matrix, tf.fill([n], -1e9)
+        )  # mask mirror pairs
+
+        y_true = tf.reshape(y_true, [-1, 1])
+        y_true = tf.cast(tf.equal(y_true, tf.transpose(y_true)), tf.int32)
+        y_onehot = tf.linalg.set_diag(y_true, tf.zeros(n, tf.int32))
+
+        return self.ce(y_onehot, similarity_matrix)
+
+    def compute_similarity_matrix(self, y_pred: tf.Tensor) -> tf.Tensor:
+        """
+        Computes the dot product similarity between all embedding pairs.
+
+        :param y_pred: The embeddings as a Tensor with shape [n, embedding dimension].
+        :return: The similarity scores as a 2D Tensor with shape [n, n]
+        """
+        return tf.matmul(y_pred, y_pred, transpose_b=True)
 
 
 # class NewLoss(PairBasedLoss):
-#     def __init__(self, miner=None, name=None):
-#         super().__init__(miner=miner, name=name)
+#     def __init__(self, ignore_diag=True, ignore_negative_labels=True, miner=None, name=None):
+#         super().__init__(ignore_diag=ignore_diag, ignore_negative_labels=ignore_negative_labels, miner=miner, name=name)

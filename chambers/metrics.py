@@ -6,6 +6,7 @@ from tensorflow.python.keras.metrics import MeanMetricWrapper
 from .losses.categorical import soft_dice_coefficient as _dsc
 
 
+@tf.keras.utils.register_keras_serializable(package="Chambers")
 class F1(tf.keras.metrics.Metric):
     def __init__(
         self, thresholds=None, top_k=None, class_id=None, name=None, dtype=None
@@ -53,6 +54,7 @@ class F1(tf.keras.metrics.Metric):
         return dict(list(base_config.items()) + list(config.items()))
 
 
+@tf.keras.utils.register_keras_serializable(package="Chambers")
 class SoftDiceCoefficient(MeanMetricWrapper):
     def __init__(
         self,

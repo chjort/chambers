@@ -5,6 +5,7 @@ from tensorflow.python.keras import backend as K
 from tensorflow.python.keras.utils import tf_utils
 
 
+@tf.keras.utils.register_keras_serializable(package="Chambers")
 class Miner(ABC):
     def __init__(self, name=None):
         self.name = name
@@ -33,7 +34,17 @@ class Miner(ABC):
 
         return mined_pos_mat, mined_neg_mat
 
+    def get_config(self):
+        config = {"name": self.name}
+        base_config = super(Miner, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
 
+    @classmethod
+    def from_config(cls, config):
+        return cls(**config)
+
+
+@tf.keras.utils.register_keras_serializable(package="Chambers")
 class MultiSimilarityMiner(Miner):
     def __init__(self, margin, name="multi_similarity_miner"):
         super().__init__(name=name)

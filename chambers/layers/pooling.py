@@ -5,6 +5,7 @@ from tensorflow.keras.layers import Layer
 from tensorflow.python.keras.layers.pooling import GlobalPooling2D
 
 
+@tf.keras.utils.register_keras_serializable(package="Chambers")
 class GlobalGeneralizedMean(GlobalPooling2D):
     """
     Global Generalized Mean layer for spatial inputs
@@ -17,11 +18,12 @@ class GlobalGeneralizedMean(GlobalPooling2D):
 
     """
 
-    def __init__(self, p=3, shared=True, trainable=True, data_format=None, **kwargs):
-        super(GlobalGeneralizedMean, self).__init__(data_format=data_format, **kwargs)
+    def __init__(self, p=3, shared=True, trainable=True, **kwargs):
+        super(GlobalGeneralizedMean, self).__init__(**kwargs)
         self._p_init = p
         self.shared = shared
         self.trainable = trainable
+        self._epsilon = 1e-6
 
     def build(self, input_shape):
         if self.shared:
@@ -33,12 +35,17 @@ class GlobalGeneralizedMean(GlobalPooling2D):
                 p_shape = input_shape[1]
 
         self.p = self.add_weight(
+            name="p",
             shape=[p_shape],
             initializer=initializers.constant(self._p_init),
             trainable=self.trainable,
         )
 
     def call(self, inputs, **kwargs):
+        inputs = tf.clip_by_value(
+            inputs, clip_value_min=self._epsilon, clip_value_max=tf.reduce_max(inputs)
+        )
+
         x = tf.pow(inputs, self.p)
         if self.data_format == "channels_last":
             x = tf.reduce_mean(x, axis=[1, 2])

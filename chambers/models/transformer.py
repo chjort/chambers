@@ -33,7 +33,8 @@ def Seq2SeqTransformer(
         num_heads=num_heads,
         ff_dim=dim_feedforward,
         num_layers=num_encoder_layers,
-        dropout_rate=dropout_rate,
+        attention_dropout_rate=dropout_rate,
+        dense_dropout_rate=dropout_rate,
     )(x_enc)
 
     x_dec = tf.keras.layers.Embedding(
@@ -89,7 +90,8 @@ def VisionTransformer(
         num_heads=n_heads,
         ff_dim=ff_dim,
         num_layers=n_encoder_layers,
-        dropout_rate=dropout_rate,
+        attention_dropout_rate=dropout_rate,
+        dense_dropout_rate=dropout_rate,
     )(x)
     x = tf.keras.layers.Cropping1D((0, x.shape[1] - 1))(x)
     x = tf.keras.layers.Reshape([-1])(x)

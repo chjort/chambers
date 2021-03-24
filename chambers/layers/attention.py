@@ -1,9 +1,26 @@
 import tensorflow as tf
-from tensorflow.keras.layers import Attention
+from tensorflow.python.keras.layers import Attention
 
 
+@tf.keras.utils.register_keras_serializable(package="Chambers")
+class ScaledAttention(Attention):
+    def _calculate_scores(self, query, key):
+        scores = super(ScaledAttention, self)._calculate_scores(query, key)
+        key_dim = tf.cast(tf.shape(key)[-1], scores.dtype)
+        scores = scores / tf.math.sqrt(key_dim)
+        return scores
+
+
+@tf.keras.utils.register_keras_serializable(package="Chambers")
 class MultiHeadAttention(tf.keras.layers.Layer):
-    def __init__(self, embed_dim=512, num_heads=8, dropout_rate=0.1, causal=False):
+    def __init__(
+        self,
+        embed_dim=512,
+        num_heads=8,
+        dense_kernel_initializer="glorot_uniform",
+        dropout_rate=0.1,
+        causal=False,
+    ):
         super(MultiHeadAttention, self).__init__()
         self.embed_dim = embed_dim
         self.num_heads = num_heads
@@ -13,11 +30,19 @@ class MultiHeadAttention(tf.keras.layers.Layer):
         assert embed_dim % num_heads == 0
         head_dim = embed_dim // num_heads
 
-        self.w_query = tf.keras.layers.Dense(embed_dim)
-        self.w_value = tf.keras.layers.Dense(embed_dim)
-        self.w_key = tf.keras.layers.Dense(embed_dim)
-        self.attention = Attention(causal=causal, dropout=dropout_rate)
-        self.w_projection = tf.keras.layers.Dense(embed_dim)
+        self.w_query = tf.keras.layers.Dense(
+            embed_dim, kernel_initializer=dense_kernel_initializer
+        )
+        self.w_value = tf.keras.layers.Dense(
+            embed_dim, kernel_initializer=dense_kernel_initializer
+        )
+        self.w_key = tf.keras.layers.Dense(
+            embed_dim, kernel_initializer=dense_kernel_initializer
+        )
+        self.w_projection = tf.keras.layers.Dense(
+            embed_dim, kernel_initializer=dense_kernel_initializer
+        )
+        self.attention = ScaledAttention(causal=causal, dropout=dropout_rate)
 
         self.reshape_split = tf.keras.layers.Reshape((-1, num_heads, head_dim))
         self.permute = tf.keras.layers.Permute((2, 1, 3))
@@ -26,6 +51,11 @@ class MultiHeadAttention(tf.keras.layers.Layer):
         self.permute_mask = tf.keras.layers.Permute((2, 1))
 
         self.reshape_merge = tf.keras.layers.Reshape((-1, embed_dim))
+
+    def build(self, input_shape):
+        # TODO: build layers here
+        # TODO: assign value to scale variable of attention layer
+        super(MultiHeadAttention, self).build(input_shape)
 
     def call(self, inputs, mask=None, training=None):
         q = inputs[0]  # [batch_size, tq, embed_dim]
@@ -45,7 +75,7 @@ class MultiHeadAttention(tf.keras.layers.Layer):
             mask = self.separate_heads_mask(mask)
 
         attention = self.attention(
-            [query, value, key], mask=mask
+            [query, value, key], mask=mask, training=training
         )  # [batch_size, num_heads, tq, head_dim]
         attention = self.merge_heads(attention)  # [batch_size, tq, embed_dim]
 
@@ -98,6 +128,3 @@ class MultiHeadAttention(tf.keras.layers.Layer):
         }
         base_config = super(MultiHeadAttention, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
-
-
-tf.keras.utils.get_custom_objects().update({"MultiHeadAttention": MultiHeadAttention})

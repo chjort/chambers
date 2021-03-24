@@ -46,8 +46,9 @@ def Seq2SeqTransformer(
         num_heads=num_heads,
         ff_dim=dim_feedforward,
         num_layers=num_decoder_layers,
-        dropout_rate=dropout_rate,
-        norm=False,
+        attention_dropout_rate=dropout_rate,
+        dense_dropout_rate=dropout_rate,
+        norm_output=False,
         causal=True,
     )([x_dec, x])
 

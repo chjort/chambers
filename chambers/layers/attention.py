@@ -15,15 +15,139 @@ class ScaledAttention(Attention):
 class MultiHeadAttention(tf.keras.layers.Layer):
     def __init__(
         self,
-        embed_dim=512,
+        head_dim=64,
         num_heads=8,
         dense_kernel_initializer="glorot_uniform",
         dropout_rate=0.1,
         causal=False,
     ):
         super(MultiHeadAttention, self).__init__()
+        self.head_dim = head_dim
+        self.num_heads = num_heads
+        self.dense_kernel_initializer = dense_kernel_initializer
+        self.dropout_rate = dropout_rate
+        self.causal = causal
+
+        self.attention = ScaledAttention(causal=causal, dropout=dropout_rate)
+
+        self.reshape_split_mask = tf.keras.layers.Reshape((-1, 1))
+        self.permute_mask = tf.keras.layers.Permute((2, 1))
+
+    def build(self, input_shape):
+        # TODO: build layers here
+        (b, tq, d) = input_shape[0]
+        self.w_query = self.add_weight(
+            name="w_query",
+            shape=(d, self.num_heads, self.head_dim),
+            initializer=self.dense_kernel_initializer,
+        )
+        self.w_value = self.add_weight(
+            name="w_value",
+            shape=(d, self.num_heads, self.head_dim),
+            initializer=self.dense_kernel_initializer,
+        )
+        self.w_key = self.add_weight(
+            name="w_key",
+            shape=(d, self.num_heads, self.head_dim),
+            initializer=self.dense_kernel_initializer,
+        )
+        self.w_projection = self.add_weight(
+            name="w_projection",
+            shape=(self.num_heads, d, self.head_dim),
+            initializer=self.dense_kernel_initializer,
+        )
+
+        # TODO: assign value to scale variable of attention layer
+        super(MultiHeadAttention, self).build(input_shape)
+
+    def call(self, inputs, mask=None, training=None):
+        q = inputs[0]  # [batch_size, tq, dim]
+        v = inputs[1]  # [batch_size, tv, dim]
+        k = inputs[2] if len(inputs) > 2 else v  # [batch_size, tv, dim]
+
+        query = tf.einsum(
+            "btd,dnh->bnth", q, self.w_query
+        )  # [batch_size, num_heads, tq, head_dim]
+
+        value = tf.einsum(
+            "btd,dnh->bnth", v, self.w_value
+        )  # [batch_size, num_heads, tv, head_dim]
+
+        key = tf.einsum(
+            "btd,dnh->bnth", k, self.w_key
+        )  # [batch_size, num_heads, tv, head_dim]
+
+        if mask is not None:
+            mask = self.separate_heads_mask(mask)
+
+        attention = self.attention(
+            [query, value, key], mask=mask, training=training
+        )  # [batch_size, num_heads, tq, head_dim]
+        x = tf.einsum(
+            "bnth,ndh->btd", attention, self.w_projection
+        )  # [batch_size, tq, dim]
+
+        return x
+
+    def separate_heads_mask(self, mask):
+        query_mask = mask[0]  # [batch_size, tq]
+        value_mask = mask[1]  # [batch_size, tv]
+
+        if query_mask is not None:
+            query_mask = self.reshape_split_mask(
+                query_mask
+            )  # [batch_size, tq, num_heads]
+            query_mask = self.permute_mask(query_mask)  # [batch_size, num_heads, tq]
+
+        if value_mask is not None:
+            value_mask = self.reshape_split_mask(
+                value_mask
+            )  # [batch_size, tv, num_heads]
+            value_mask = self.permute_mask(value_mask)  # [batch_size, num_heads, tv]
+
+        return [query_mask, value_mask]
+
+    def compute_mask(self, inputs, mask=None):
+        if mask:
+            q_mask = mask[0]
+            if q_mask is None:
+                return None
+            return tf.convert_to_tensor(q_mask)
+        return None
+
+    def get_config(self):
+        config = {
+            "head_dim": self.head_dim,
+            "num_heads": self.num_heads,
+            "dense_kernel_initializer": tf.keras.initializers.serialize(
+                self.dense_kernel_initializer
+            ),
+            "dropout_rate": self.dropout_rate,
+            "causal": self.causal,
+        }
+        base_config = super(MultiHeadAttention, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
+
+    def from_config(cls, config):
+        config["dense_kernel_initializer"] = tf.keras.initializers.deserialize(
+            config["dense_kernel_initializer"]
+        )
+        return cls(**config)
+
+
+class MultiHeadAttentionOG(tf.keras.layers.Layer):
+    def __init__(
+        self,
+        embed_dim=512,
+        num_heads=8,
+        dense_kernel_initializer="glorot_uniform",
+        dropout_rate=0.1,
+        causal=False,
+    ):
+        super(MultiHeadAttentionOG, self).__init__()
         self.embed_dim = embed_dim
         self.num_heads = num_heads
+        self.dense_kernel_initializer = dense_kernel_initializer
         self.dropout_rate = dropout_rate
         self.causal = causal
 
@@ -55,7 +179,7 @@ class MultiHeadAttention(tf.keras.layers.Layer):
     def build(self, input_shape):
         # TODO: build layers here
         # TODO: assign value to scale variable of attention layer
-        super(MultiHeadAttention, self).build(input_shape)
+        super(MultiHeadAttentionOG, self).build(input_shape)
 
     def call(self, inputs, mask=None, training=None):
         q = inputs[0]  # [batch_size, tq, embed_dim]
@@ -123,8 +247,17 @@ class MultiHeadAttention(tf.keras.layers.Layer):
         config = {
             "embed_dim": self.embed_dim,
             "num_heads": self.num_heads,
+            "dense_kernel_initializer": tf.keras.initializers.serialize(
+                self.dense_kernel_initializer
+            ),
             "dropout_rate": self.dropout_rate,
             "causal": self.causal,
         }
-        base_config = super(MultiHeadAttention, self).get_config()
+        base_config = super(MultiHeadAttentionOG, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
+
+    def from_config(cls, config):
+        config["dense_kernel_initializer"] = tf.keras.initializers.deserialize(
+            config["dense_kernel_initializer"]
+        )
+        return cls(**config)

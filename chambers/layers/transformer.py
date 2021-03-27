@@ -366,14 +366,16 @@ class Decoder(tf.keras.layers.Layer):
             x = layer([x, x_encoder], mask=mask, training=training)
             decode_sequence.append(x)
 
-        if self.norm_output:
-            decode_sequence = [self.norm_layer(x) for x in decode_sequence]
-
         if self.return_sequence:
+            if self.norm_output:
+                decode_sequence = [self.norm_layer(x) for x in decode_sequence]
+
             x = tf.stack(decode_sequence, axis=0)
             x = tf.transpose(x, [1, 0, 2, 3])
         else:
             x = decode_sequence[-1]
+            if self.norm_output:
+                x = self.norm_layer(x)
 
         return x
 

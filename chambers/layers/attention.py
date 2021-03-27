@@ -1,13 +1,26 @@
+import math
+
 import tensorflow as tf
 from tensorflow.python.keras.layers import Attention
 
 
 @tf.keras.utils.register_keras_serializable(package="Chambers")
 class ScaledAttention(Attention):
+    def __init__(self, key_dim=None, *args, **kwargs):
+        super(ScaledAttention, self).__init__(*args, **kwargs)
+        self.key_dim = key_dim
+        self._scale = math.sqrt(key_dim) if key_dim is not None else None
+
     def _calculate_scores(self, query, key):
         scores = super(ScaledAttention, self)._calculate_scores(query, key)
-        key_dim = tf.cast(tf.shape(key)[-1], scores.dtype)
-        scores = scores / tf.math.sqrt(key_dim)
+
+        if self.key_dim is None:
+            key_dim = tf.cast(tf.shape(key)[-1], scores.dtype)
+            scale = tf.sqrt(key_dim)
+        else:
+            scale = tf.cast(self._scale, scores.dtype)
+
+        scores = scores / scale
         return scores
 
 
@@ -28,7 +41,7 @@ class MultiHeadAttention(tf.keras.layers.Layer):
         self.dropout_rate = dropout_rate
         self.causal = causal
 
-        self.attention = ScaledAttention(causal=causal, dropout=dropout_rate)
+        self.attention = ScaledAttention(key_dim=head_dim, causal=causal, dropout=dropout_rate)
 
         self.reshape_split_mask = tf.keras.layers.Reshape((-1, 1))
         self.permute_mask = tf.keras.layers.Permute((2, 1))

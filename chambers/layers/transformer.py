@@ -122,7 +122,7 @@ class DecoderLayer(tf.keras.layers.Layer):
 
         # self-attention
         self.multi_head_attention1 = MultiHeadAttention(
-            embed_dim=embed_dim,
+            head_dim=embed_dim // num_heads,
             num_heads=num_heads,
             dense_kernel_initializer=self.dense_kernel_initializer,
             dropout_rate=attention_dropout_rate,
@@ -136,7 +136,7 @@ class DecoderLayer(tf.keras.layers.Layer):
 
         # cross-attention
         self.multi_head_attention2 = MultiHeadAttention(
-            embed_dim=embed_dim,
+            head_dim=embed_dim // num_heads,
             num_heads=num_heads,
             dense_kernel_initializer=self.dense_kernel_initializer,
             dropout_rate=attention_dropout_rate,

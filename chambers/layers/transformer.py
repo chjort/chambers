@@ -26,7 +26,8 @@ class EncoderLayer(tf.keras.layers.Layer):
         self.norm_epsilon = norm_epsilon
 
         self.multi_head_attention = MultiHeadAttention(
-            embed_dim=embed_dim,
+            # embed_dim=embed_dim,
+            head_dim=embed_dim // num_heads,
             num_heads=num_heads,
             dense_kernel_initializer=self.dense_kernel_initializer,
             dropout_rate=attention_dropout_rate,

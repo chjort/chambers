@@ -49,7 +49,6 @@ class MultiHeadAttentionEin(tf.keras.layers.Layer):
         self.permute_mask = tf.keras.layers.Permute((2, 1))
 
     def build(self, input_shape):
-        # TODO: build layers here
         (b, tq, d) = input_shape[0]
         self.w_query = self.add_weight(
             name="w_query",
@@ -71,8 +70,7 @@ class MultiHeadAttentionEin(tf.keras.layers.Layer):
             shape=(self.num_heads, d, self.head_dim),
             initializer=self.dense_kernel_initializer,
         )
-
-        # TODO: assign value to scale variable of attention layer
+        # TODO: Bias kernels!
         super(MultiHeadAttentionEin, self).build(input_shape)
 
     def call(self, inputs, mask=None, training=None):

@@ -36,7 +36,7 @@ class Attention(tf.keras.layers.Attention):
         if scores_mask is not None:
             padding_mask = math_ops.logical_not(scores_mask)
             # Bias so padding positions do not contribute to attention distribution.
-            scores -= 1.0e9 * math_ops.cast(padding_mask, dtype=scores.dtype)
+            scores -= tf.minimum(scores.dtype.max, 1e-9) * math_ops.cast(padding_mask, dtype=scores.dtype)
         if training is None:
             training = tf.keras.backend.learning_phase()
         weights = tf.nn.softmax(scores)

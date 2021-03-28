@@ -343,6 +343,7 @@ def crop_and_resize(image, height, width):
     )
 
 
+# NOTE: Layer done
 def gaussian_blur(image, kernel_size, sigma, padding="SAME"):
     """Blurs the given image with separable convolution.
 

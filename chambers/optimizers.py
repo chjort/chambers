@@ -172,10 +172,12 @@ class WeightDecayExtension(DecoupledWeightDecayExtension):
                 if re.search(name, var.name) is not None:
                     return True
             return False
-        else:
+        elif self.decay_exclude is not None:
             for name in self.decay_exclude:
                 if re.search(name, var.name) is not None:
                     return False
+            return True
+        else:
             return True
 
     def get_config(self):

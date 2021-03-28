@@ -24,6 +24,11 @@ def deserialize_object(identifier, module_objects, module_name, **kwargs):
         )
 
 
+def use_mixed_precision(dtype="mixed_float16"):
+    policy = tf.keras.mixed_precision.experimental.Policy(name=dtype)
+    tf.keras.mixed_precision.experimental.set_policy(policy)
+
+
 def set_random_seed(seed: int):
     # Python seeds
     os.environ["PYTHONHASHSEED"] = str(seed)
@@ -91,3 +96,72 @@ def get_model_memory_usage(batch_size, model):
     )
     gbytes = np.round(total_memory / (1024.0 ** 3), 3) + internal_model_mem_count
     return gbytes
+
+
+class ProgressBar:
+    def __init__(self, total, cols=30):
+        self.total = total
+        self.cols = cols
+        self._steps = tf.Variable(0, dtype=tf.int32)
+        self._start_time = tf.timestamp()
+
+    def _step_string(self):
+        p_complete = self._steps / self.total
+
+        n_complete = tf.cast(tf.math.floor(p_complete * self.cols), tf.int32)
+        n_remaining = tf.cast(self.cols - n_complete, tf.int32)
+        n_current = tf.cast(n_remaining > 0, tf.int32)
+        n_remaining = n_remaining - n_current
+
+        completed = tf.strings.reduce_join(tf.repeat("=", n_complete, axis=0))
+        current = tf.strings.reduce_join(tf.repeat(">", n_current, axis=0))
+        remaining = tf.strings.reduce_join(tf.repeat(".", n_remaining, axis=0))
+        s = tf.strings.reduce_join(["[", completed, current, remaining, "]"])
+
+        frac = tf.strings.reduce_join(
+            [tf.as_string(self._steps), "/", tf.as_string(self.total)]
+        )
+        s = tf.strings.reduce_join(["\r", frac, " ", s])
+        return s
+
+    def _time_string(self):
+        elapsed = tf.timestamp() - self._start_time
+        time_per_step = elapsed / tf.cast(self._steps, tf.float64)
+
+        # elapsed = self._num_to_string(elapsed, 2)
+        time_per_step = self._num_to_string(time_per_step, 2)
+
+        s = tf.strings.reduce_join([" - ", time_per_step, "s/step"])
+        return s
+
+    @staticmethod
+    def _num_to_string(num, decimals=2):
+        num_str = tf.as_string(num)
+        if num.dtype.is_floating:
+            len_ = tf.strings.length(num_str)
+            decimals_to_remove = tf.maximum(
+                0, 6 - decimals
+            )  # float string has 6 decimals by default.
+            num_str = tf.strings.substr(num_str, 0, len_ - decimals_to_remove)
+
+        return num_str
+
+    @staticmethod
+    def _print(s):
+        tf.print(s, end="")
+
+    def _report_progress(self):
+        ss = self._step_string()
+        ts = self._time_string()
+        self._print(ss)
+        self._print(ts)
+
+    def update(self, n):
+        n = tf.cast(n, tf.int32)
+        self._steps.assign(n)
+        self._report_progress()
+
+    def add(self, n):
+        n = tf.cast(n, tf.int32)
+        self._steps.assign_add(n)
+        self._report_progress()

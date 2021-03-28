@@ -47,6 +47,7 @@ def random_brightness(image, max_delta, impl="simclrv2"):
     return image
 
 
+# NOTE: Layer done
 def to_grayscale(image, keep_channels=True):
     image = tf.image.rgb_to_grayscale(image)
     if keep_channels:
@@ -228,6 +229,7 @@ def _compute_crop_shape(image_height, image_width, aspect_ratio, crop_proportion
     )
 
 
+# NOTE: augmentations.CenterCrop()?
 def center_crop(image, height, width, crop_proportion):
     """Crops to center of image and rescales to desired size.
 
@@ -312,6 +314,7 @@ def distorted_bounding_box_crop(
     return image
 
 
+# NOTE: augmentations.RandomCrop()?
 def crop_and_resize(image, height, width):
     """Make a random crop and resize it to height `height` and width `width`.
 
@@ -355,10 +358,10 @@ def gaussian_blur(image, kernel_size, sigma, padding="SAME"):
     Returns:
       A Tensor representing the blurred image.
     """
-    radius = tf.to_int32(kernel_size / 2)
+    radius = tf.cast(kernel_size / 2, tf.int32)
     kernel_size = radius * 2 + 1
-    x = tf.to_float(tf.range(-radius, radius + 1))
-    blur_filter = tf.exp(-tf.pow(x, 2.0) / (2.0 * tf.pow(tf.to_float(sigma), 2.0)))
+    x = tf.cast(tf.range(-radius, radius + 1), tf.float32)
+    blur_filter = tf.exp(-tf.pow(x, 2.0) / (2.0 * tf.pow(tf.cast(sigma, tf.float32), 2.0)))
     blur_filter /= tf.reduce_sum(blur_filter)
     # One vertical and one horizontal filter.
     blur_v = tf.reshape(blur_filter, [kernel_size, 1, 1, 1])

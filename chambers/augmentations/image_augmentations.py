@@ -746,3 +746,72 @@ class CutOut(preprocessing.PreprocessingLayer):
         config = {"mask_size": self.mask_size, "constant_values": self.constant_values}
         base_config = super(CutOut, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
+
+
+class Grayscale(preprocessing.PreprocessingLayer):
+    def __init__(self, keep_channels=False, **kwargs):
+        super(Grayscale, self).__init__(**kwargs)
+        self.keep_channels = keep_channels
+        self.input_spec = InputSpec(ndim=4)
+
+    def call(self, inputs, **kwargs):
+        x = tf.image.rgb_to_grayscale(inputs)
+        if self.keep_channels:
+            x = tf.concat([x, x, x], axis=-1)
+        return x
+
+    def compute_output_shape(self, input_shape):
+        return input_shape
+
+    def get_config(self):
+        config = {"keep_channels": self.keep_channels}
+        base_config = super(Grayscale, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
+
+
+class RGB(preprocessing.PreprocessingLayer):
+    def __init__(self, **kwargs):
+        super(RGB, self).__init__(**kwargs)
+        self.input_spec = InputSpec(ndim=4)
+
+    def call(self, inputs, **kwargs):
+        x = tf.image.grayscale_to_rgb(inputs)
+        return x
+
+    def compute_output_shape(self, input_shape):
+        return input_shape
+
+
+class GaussianBlur(preprocessing.PreprocessingLayer):
+    def __init__(
+        self, kernel_size, sigma=1.0, padding="CONSTANT", constant_values=0.0, **kwargs
+    ):
+        super(GaussianBlur, self).__init__(**kwargs)
+        self.kernel_size = kernel_size
+        self.sigma = sigma
+        self.padding = padding
+        self.constant_values = constant_values
+
+    def call(self, inputs, **kwargs):
+        # TODO: Is this very slow?
+        x = tfa.image.gaussian_filter2d(
+            inputs,
+            filter_shape=self.kernel_size,
+            sigma=self.sigma,
+            padding=self.padding,
+            constant_values=self.constant_values,
+        )
+        return x
+
+    def compute_output_shape(self, input_shape):
+        return input_shape
+
+    def get_config(self):
+        config = {
+            "kernel_size": self.kernel_size,
+            "sigma": self.sigma,
+            "padding": self.padding,
+            "constant_values": self.constant_values,
+        }
+        base_config = super(GaussianBlur, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))

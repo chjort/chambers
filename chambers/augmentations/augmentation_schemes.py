@@ -1,9 +1,14 @@
+from packaging import version
 import tensorflow as tf
 from tensorflow.keras.layers.experimental import preprocessing
 from tensorflow.python.keras.engine.input_spec import InputSpec
 
 from chambers.augmentations import image_augmentations
-from tensorflow.python.keras.utils import tf_utils
+
+if version.parse(tf.__version__) < version.parse("2.4"):
+    from tensorflow.python.keras.utils.tf_utils import smart_cond
+else:
+    from tensorflow.python.keras.utils.control_flow_util import smart_cond
 
 _INTERPOLATION_MODE = "nearest"
 _FILL_MODE = "constant"
@@ -154,7 +159,7 @@ class AutoAugment(preprocessing.PreprocessingLayer):
         if training is None:
             training = tf.keras.backend.learning_phase()
 
-        x = tf_utils.smart_cond(
+        x = smart_cond(
             pred=training,
             true_fn=lambda: self._transform(inputs),
             false_fn=lambda: inputs,
@@ -206,7 +211,7 @@ class RandAugment(preprocessing.PreprocessingLayer):
         if training is None:
             training = tf.keras.backend.learning_phase()
 
-        x = tf_utils.smart_cond(
+        x = smart_cond(
             pred=training,
             true_fn=lambda: self._transform(inputs),
             false_fn=lambda: inputs,

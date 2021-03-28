@@ -51,8 +51,8 @@ def blend(image1, image2, factor):
 
 def _randomly_negate_value(value):
     """With 50% prob turn the value negative."""
-    should_flip = tf.random.uniform([]) < 0.5
-    value = tf.cond(should_flip, lambda: value, lambda: -value)
+    do_negate = tf.random.uniform([]) < 0.5
+    value = tf.cond(do_negate, lambda: -value, lambda: value)
     return value
 
 

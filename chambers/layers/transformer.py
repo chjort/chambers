@@ -64,10 +64,10 @@ class EncoderLayer(tf.keras.layers.Layer):
         x = self.add_attention([inputs, attention])
         x = self.layer_norm_attention(x)
 
-        # Intermediate
+        # intermediate
         dense = self.dense1(x)
 
-        # Output
+        # output
         dense = self.dense2(dense)
         dense = self.dropout2(dense, training=training)
         x = self.add_dense([x, dense])

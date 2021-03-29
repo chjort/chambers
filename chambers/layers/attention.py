@@ -38,7 +38,7 @@ class Attention(tf.keras.layers.Attention):
             # Bias so padding positions do not contribute to attention distribution.
             scores -= tf.minimum(scores.dtype.max, 1.0e9) * math_ops.cast(
                 padding_mask, dtype=scores.dtype
-            )
+            )  # compatible with mixed precision
         if training is None:
             training = tf.keras.backend.learning_phase()
         weights = tf.nn.softmax(scores)
@@ -82,7 +82,7 @@ class MultiHeadAttention(tf.keras.layers.Layer):
         dropout_rate=0.1,
         causal=False,
     ):
-        super(MultiHeadAttentionEin, self).__init__()
+        super(MultiHeadAttention, self).__init__()
         self.head_dim = head_dim
         self.num_heads = num_heads
         self.dense_kernel_initializer = dense_kernel_initializer

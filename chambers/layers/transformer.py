@@ -161,6 +161,8 @@ class DecoderLayer(tf.keras.layers.Layer):
         self.add_dense = tf.keras.layers.Add()
         self.layer_norm_dense = tf.keras.layers.LayerNormalization(epsilon=norm_epsilon)
 
+        self.supports_masking = True
+
     def call(self, inputs, mask=None, training=None):
         x, x_encoder = inputs
         q_mask = mask[0] if mask else None

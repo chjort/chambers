@@ -2,6 +2,7 @@ import numpy as np
 import tensorflow as tf
 
 
+@tf.keras.utils.register_keras_serializable(package="Chambers")
 class PositionalEmbedding1D(tf.keras.layers.Layer):
     def __init__(self, embedding_dim, temperature=10000, add_to_input=True, **kwargs):
         super(PositionalEmbedding1D, self).__init__(**kwargs)
@@ -73,6 +74,7 @@ class PositionalEmbedding1D(tf.keras.layers.Layer):
         return dict(list(base_config.items()) + list(config.items()))
 
 
+@tf.keras.utils.register_keras_serializable(package="Chambers")
 class PositionalEmbedding2D(tf.keras.layers.Layer):
     # These are the default parameters used in the original project
     def __init__(
@@ -162,6 +164,7 @@ class PositionalEmbedding2D(tf.keras.layers.Layer):
         return dict(list(base_config.items()) + list(config.items()))
 
 
+@tf.keras.utils.register_keras_serializable(package="Chambers")
 class LearnedEmbedding1D(tf.keras.layers.Layer):
     def __init__(
         self,
@@ -201,6 +204,7 @@ class LearnedEmbedding1D(tf.keras.layers.Layer):
         return dict(list(base_config.items()) + list(config.items()))
 
 
+@tf.keras.utils.register_keras_serializable(package="Chambers")
 class ConcatEmbedding(tf.keras.layers.Layer):
     def __init__(
         self,
@@ -255,13 +259,3 @@ class ConcatEmbedding(tf.keras.layers.Layer):
         }
         base_config = super(ConcatEmbedding, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
-
-
-tf.keras.utils.get_custom_objects().update(
-    {
-        "PositionalEmbedding1D": PositionalEmbedding1D,
-        "PositionalEmbedding2D": PositionalEmbedding2D,
-        "LearnedEmbedding1D": LearnedEmbedding1D,
-        "ConcatEmbedding": ConcatEmbedding,
-    }
-)

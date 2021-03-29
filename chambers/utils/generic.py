@@ -27,6 +27,8 @@ def deserialize_object(identifier, module_objects, module_name, **kwargs):
 def use_mixed_precision(dtype="mixed_float16"):
     policy = tf.keras.mixed_precision.experimental.Policy(name=dtype)
     tf.keras.mixed_precision.experimental.set_policy(policy)
+    print("Computation dtype:", policy.compute_dtype)
+    print("Variable dtype:", policy.variable_dtype)
 
 
 def set_random_seed(seed: int):

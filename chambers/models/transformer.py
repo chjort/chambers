@@ -28,7 +28,7 @@ def Seq2SeqTransformer(
         input_vocab_size, embed_dim, mask_zero=True, name="inputs_embed"
     )(inputs)
     x_enc = PositionalEmbedding1D(embed_dim, name="inputs_positional_encoding")(x_enc)
-    x = Encoder(
+    x_enc = Encoder(
         embed_dim=embed_dim,
         num_heads=num_heads,
         ff_dim=dim_feedforward,
@@ -41,7 +41,7 @@ def Seq2SeqTransformer(
         output_vocab_size, embed_dim, mask_zero=True, name="targets_embed"
     )(targets)
     x_dec = PositionalEmbedding1D(embed_dim, name="targets_positional_encoding")(x_dec)
-    x = Decoder(
+    x_dec = Decoder(
         embed_dim=embed_dim,
         num_heads=num_heads,
         ff_dim=dim_feedforward,
@@ -50,9 +50,9 @@ def Seq2SeqTransformer(
         dense_dropout_rate=dropout_rate,
         norm_output=False,
         causal=True,
-    )([x_dec, x])
+    )([x_dec, x_enc])
 
-    x = tf.keras.layers.Dense(output_vocab_size)(x)
+    x = tf.keras.layers.Dense(output_vocab_size)(x_dec)
 
     model = tf.keras.models.Model(inputs=[inputs, targets], outputs=x, name=name)
     return model

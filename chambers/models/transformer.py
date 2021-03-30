@@ -6,6 +6,7 @@ from chambers.layers.embedding import (
     PositionalEmbedding1D,
     ConcatEmbedding,
     LearnedEmbedding1D,
+    LearnedEmbedding0D,
 )
 from chambers.layers.transformer import Encoder, Decoder
 
@@ -58,6 +59,31 @@ def Seq2SeqTransformer(
     return model
 
 
+def _patch_embeddings(x, patch_size, patch_dim, name=None):
+    x = tf.keras.Sequential(
+        [
+            Rearrange(
+                "b (h p1) (w p2) c -> b (h w) (p1 p2 c)", p1=patch_size, p2=patch_size
+            ),
+            tf.keras.layers.Dense(patch_dim),
+        ],
+        name=name,
+    )(x)
+    # x = tf.keras.Sequential(
+    #     [
+    #         tf.keras.layers.Conv2D(
+    #             filters=patch_dim,
+    #             kernel_size=patch_size,
+    #             strides=patch_size,
+    #             padding="valid",
+    #         ),
+    #         tf.keras.layers.Reshape([-1, patch_dim])
+    #     ],
+    #     name=name,
+    # )(x)
+    return x
+
+
 def VisionTransformer(
     input_shape,
     n_classes,
@@ -69,22 +95,17 @@ def VisionTransformer(
     dropout_rate=0.0,
 ):
     inputs = tf.keras.layers.Input(input_shape)
-    x = Rearrange(
-        "b (h p1) (w p2) c -> b (h w) (p1 p2 c)", p1=patch_size, p2=patch_size
-    )(inputs)
-    x = tf.keras.layers.Dense(patch_dim)(x)
+    x = _patch_embeddings(inputs, patch_size, patch_dim, name="patch_embeddings")
     x = ConcatEmbedding(
-        1,
-        patch_dim,
+        n_embeddings=1,
+        embedding_dim=patch_dim,
         side="left",
         axis=1,
         initializer=tf.keras.initializers.RandomNormal(),
         name="add_cls_token",
     )(x)
     x = LearnedEmbedding1D(
-        patch_dim,
-        initializer=tf.keras.initializers.RandomNormal(),
-        name="pos_embedding",
+        initializer=tf.keras.initializers.RandomNormal(), name="pos_embedding"
     )(x)
     x = Encoder(
         embed_dim=patch_dim,
@@ -93,6 +114,7 @@ def VisionTransformer(
         num_layers=n_encoder_layers,
         attention_dropout_rate=dropout_rate,
         dense_dropout_rate=dropout_rate,
+        norm_output=True,
     )(x)
     x = tf.keras.layers.Cropping1D((0, x.shape[1] - 1))(x)
     x = tf.keras.layers.Reshape([-1])(x)

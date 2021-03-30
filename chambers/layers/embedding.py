@@ -172,13 +172,11 @@ class PositionalEmbedding2D(tf.keras.layers.Layer):
 class LearnedEmbedding1D(tf.keras.layers.Layer):
     def __init__(
         self,
-        embedding_dim,
         initializer=None,
         dtype=None,
         add_to_input=True,
         name="learned_embedding",
     ):
-        self.embedding_dim = embedding_dim
         self.initializer = initializer
         self.add_to_input = add_to_input
         self.supports_masking = True
@@ -187,7 +185,7 @@ class LearnedEmbedding1D(tf.keras.layers.Layer):
     def build(self, input_shape):
         self.embedding = self.add_weight(
             "embeddings",
-            shape=[input_shape[1], self.embedding_dim],
+            shape=[input_shape[1], input_shape[-1]],
             initializer=self.initializer,
             dtype=self.dtype,
         )
@@ -200,12 +198,21 @@ class LearnedEmbedding1D(tf.keras.layers.Layer):
 
     def get_config(self):
         config = {
-            "embedding_dim": self.embedding_dim,
-            "initializer": self.initializer,
+            "initializer": self.initializer,  # TODO: serialize
             "add_to_input": self.add_to_input,
         }
         base_config = super(LearnedEmbedding1D, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
+
+
+class LearnedEmbedding0D(LearnedEmbedding1D):
+    def build(self, input_shape):
+        self.embedding = self.add_weight(
+            "embeddings",
+            shape=[1, input_shape[-1]],
+            initializer=self.initializer,
+            dtype=self.dtype,
+        )
 
 
 @tf.keras.utils.register_keras_serializable(package="Chambers")
@@ -259,7 +266,7 @@ class ConcatEmbedding(tf.keras.layers.Layer):
             "embedding_dim": self.embedding_dim,
             "axis": self.axis,
             "side": self.side,
-            "initializer": self.initializer,
+            "initializer": self.initializer,  # TODO: serialize
         }
         base_config = super(ConcatEmbedding, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))

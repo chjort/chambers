@@ -14,9 +14,8 @@ ModelParams = collections.namedtuple(
 )
 
 BASE_WEIGHTS_PATH = (
-    'https://github.com/qubvel/classification_models/releases/download/0.0.1/')
+    'https://github.com/chjort/chambers/releases/download/v1.0/')
 WEIGHTS_HASHES = {
-    # name: (include_top weights, notop weights)
     'seresnet50':
         ('ff0ce1ed5accaad05d113ecef2d29149', '043777781b0d5ca756474d60bf115ef1'),
     'seresnet101':

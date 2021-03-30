@@ -453,16 +453,9 @@ def SENet(
     else:
         inputs = input
 
-    model = models.Model(inputs, x)
-
-    # if weights:
-    #     if type(weights) == str and os.path.exists(weights):
-    #         model.load_weights(weights)
-    #     else:
-    #         load_model_weights(model, model_params.model_name,
-    #                            weights, classes, include_top, **kwargs)
-
     model_name = model_params.model_name
+    model = models.Model(inputs, x, name=model_name)
+
     if (weights == 'imagenet') and (model_name in WEIGHTS_HASHES):
         if include_top:
             file_name = model_name + '_imagenet_1000.h5'

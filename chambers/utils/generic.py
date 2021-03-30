@@ -29,6 +29,10 @@ def use_mixed_precision(dtype="mixed_float16"):
     tf.keras.mixed_precision.experimental.set_policy(policy)
     print("Computation dtype:", policy.compute_dtype)
     print("Variable dtype:", policy.variable_dtype)
+    if dtype.endswith("16"):
+        eps = 1e-4
+        tf.keras.backend.set_epsilon(eps)
+        print("Backend epsilon:", eps)
 
 
 def set_random_seed(seed: int):

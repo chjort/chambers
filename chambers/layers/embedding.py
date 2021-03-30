@@ -4,6 +4,8 @@ import tensorflow as tf
 
 @tf.keras.utils.register_keras_serializable(package="Chambers")
 class PositionalEmbedding1D(tf.keras.layers.Layer):
+    # TODO: Refactor this class to only compute embeddings once, and not every call.
+
     def __init__(self, embedding_dim, temperature=10000, add_to_input=True, **kwargs):
         super(PositionalEmbedding1D, self).__init__(**kwargs)
         self.embedding_dim = embedding_dim
@@ -76,6 +78,8 @@ class PositionalEmbedding1D(tf.keras.layers.Layer):
 
 @tf.keras.utils.register_keras_serializable(package="Chambers")
 class PositionalEmbedding2D(tf.keras.layers.Layer):
+    # TODO: Refactor this class to only compute embeddings once, and not every call.
+
     # These are the default parameters used in the original project
     def __init__(
         self,

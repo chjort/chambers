@@ -19,11 +19,12 @@ class GlobalGeneralizedMean(GlobalPooling2D):
     """
 
     def __init__(self, p=3, shared=True, trainable=True, **kwargs):
-        super(GlobalGeneralizedMean, self).__init__(**kwargs)
+        kwargs.pop("dtype", None)
+        super(GlobalGeneralizedMean, self).__init__(dtype=tf.float32, **kwargs)
         self._p_init = p
         self.shared = shared
         self.trainable = trainable
-        self._epsilon = 1e-6
+        self._epsilon = tf.keras.backend.epsilon()
 
     def build(self, input_shape):
         if self.shared:

@@ -59,31 +59,6 @@ def Seq2SeqTransformer(
     return model
 
 
-def _patch_embeddings(x, patch_size, patch_dim, name=None):
-    x = tf.keras.Sequential(
-        [
-            Rearrange(
-                "b (h p1) (w p2) c -> b (h w) (p1 p2 c)", p1=patch_size, p2=patch_size
-            ),
-            tf.keras.layers.Dense(patch_dim),
-        ],
-        name=name,
-    )(x)
-    # x = tf.keras.Sequential(
-    #     [
-    #         tf.keras.layers.Conv2D(
-    #             filters=patch_dim,
-    #             kernel_size=patch_size,
-    #             strides=patch_size,
-    #             padding="valid",
-    #         ),
-    #         tf.keras.layers.Reshape([-1, patch_dim])
-    #     ],
-    #     name=name,
-    # )(x)
-    return x
-
-
 def VisionTransformer(
     input_shape,
     n_classes,
@@ -95,7 +70,16 @@ def VisionTransformer(
     dropout_rate=0.0,
 ):
     inputs = tf.keras.layers.Input(input_shape)
-    x = _patch_embeddings(inputs, patch_size, patch_dim, name="patch_embeddings")
+    patch_embeddings = tf.keras.Sequential(
+        [
+            Rearrange(
+                "b (h p1) (w p2) c -> b (h w) (p1 p2 c)", p1=patch_size, p2=patch_size
+            ),
+            tf.keras.layers.Dense(patch_dim),
+        ],
+        name="patch_embeddings",
+    )
+    x = patch_embeddings(inputs)
     x = ConcatEmbedding(
         n_embeddings=1,
         embedding_dim=patch_dim,
@@ -129,6 +113,86 @@ def VisionTransformer(
     )(x)
 
     model = tf.keras.models.Model(inputs, x)
+    return model
+
+
+def VisionTransformerOS(
+    input_shape,
+    n_classes,
+    patch_size,
+    patch_dim,
+    n_encoder_layers,
+    n_heads,
+    ff_dim,
+    dropout_rate=0.0,
+):
+    inputs1 = tf.keras.layers.Input(input_shape)
+    inputs2 = tf.keras.layers.Input(input_shape)
+
+    patch_embeddings = tf.keras.Sequential(
+        [
+            Rearrange(
+                "b (h p1) (w p2) c -> b (h w) (p1 p2 c)", p1=patch_size, p2=patch_size
+            ),
+            tf.keras.layers.Dense(patch_dim),
+        ],
+        name="patch_embeddings",
+    )
+    x1 = patch_embeddings(inputs1)
+    x2 = patch_embeddings(inputs2)
+
+    x1 = LearnedEmbedding0D(
+        initializer=tf.keras.initializers.RandomNormal(stddev=0.06),
+        name="segment1_embedding",
+    )(x1)
+    x2 = LearnedEmbedding0D(
+        initializer=tf.keras.initializers.RandomNormal(stddev=0.06),
+        name="segment2_embedding",
+    )(x2)
+
+    x = ConcatEmbedding(
+        n_embeddings=1,
+        embedding_dim=patch_dim,
+        side="left",
+        axis=1,
+        initializer="zeros",
+        name="add_cls_token",
+    )(x1)
+    x = ConcatEmbedding(
+        n_embeddings=1,
+        embedding_dim=patch_dim,
+        side="right",
+        axis=1,
+        initializer="zeros",
+        name="add_sep_token",
+    )(x)
+    x = tf.keras.layers.Concatenate(axis=1)([x, x2])
+
+    x = LearnedEmbedding1D(
+        initializer=tf.keras.initializers.RandomNormal(stddev=0.06),
+        name="pos_embedding",
+    )(x)
+    x = Encoder(
+        embed_dim=patch_dim,
+        num_heads=n_heads,
+        ff_dim=ff_dim,
+        num_layers=n_encoder_layers,
+        attention_dropout_rate=dropout_rate,
+        dense_dropout_rate=dropout_rate,
+        norm_output=True,
+    )(x)
+    x = tf.keras.layers.Cropping1D((0, x.shape[1] - 1))(x)
+    x = tf.keras.layers.Reshape([-1])(x)
+
+    x = tf.keras.Sequential(
+        [
+            tf.keras.layers.Dense(ff_dim, activation=gelu),
+            tf.keras.layers.Dense(n_classes, activation="sigmoid"),
+        ],
+        name="mlp_head",
+    )(x)
+
+    model = tf.keras.models.Model([inputs1, inputs2], x)
     return model
 
 

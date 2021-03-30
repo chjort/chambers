@@ -11,16 +11,16 @@ class LinearWarmup(LearningRateSchedule):
 
         if ramp:
             learning_rate = self._get_learning_rate(0)
-            self.warmup_rates = tf.linspace(0.0, learning_rate, warmup_steps)
+            self.step_size = learning_rate / warmup_steps
 
     def __call__(self, step):
         step = tf.cast(step, tf.float32)
 
         if self.ramp:
             learning_rate = tf.cond(
-                pred=(step < self.warmup_steps - 1),
-                true_fn=lambda: self.warmup_rates[tf.cast(step, tf.int32)],
-                false_fn=lambda: self._get_learning_rate(step - self.warmup_steps + 1),
+                pred=(step < self.warmup_steps),
+                true_fn=lambda: step * self.step_size,
+                false_fn=lambda: self._get_learning_rate(step - self.warmup_steps),
             )
         else:
             warmup_percent = step / self.warmup_steps

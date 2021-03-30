@@ -101,11 +101,12 @@ def VisionTransformer(
         embedding_dim=patch_dim,
         side="left",
         axis=1,
-        initializer=tf.keras.initializers.RandomNormal(),
+        initializer="zeros",
         name="add_cls_token",
     )(x)
     x = LearnedEmbedding1D(
-        initializer=tf.keras.initializers.RandomNormal(), name="pos_embedding"
+        initializer=tf.keras.initializers.RandomNormal(stddev=0.06),
+        name="pos_embedding",
     )(x)
     x = Encoder(
         embed_dim=patch_dim,

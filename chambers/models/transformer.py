@@ -1,5 +1,6 @@
 import tensorflow as tf
 from tensorflow.python.keras.applications import imagenet_utils
+from tensorflow.python.keras.utils import layer_utils
 
 from chambers.layers.embedding import (
     PositionalEmbedding1D,
@@ -88,9 +89,9 @@ def VisionTransformer(
     )
     inputs = inputs_to_input_layer(input_tensor, input_shape)
 
-    if None in input_shape:
+    if None in inputs.shape[1:]:
         raise ValueError(
-            "'input_shape' must be fully specified; got 'input_shape'={}.".format(
+            "Input shape must be fully specified; got input shape {}.".format(
                 inputs.shape[1:]
             )
         )
@@ -121,6 +122,7 @@ def VisionTransformer(
         initializer=tf.keras.initializers.RandomNormal(stddev=0.06),
         name="pos_embedding",
     )(x)
+    x = tf.keras.layers.Dropout(dropout_rate)(x)
     x = Encoder(
         embed_dim=patch_dim,
         num_heads=n_heads,
@@ -155,6 +157,9 @@ def VisionTransformer(
         x = tf.keras.layers.Dense(
             units=classes, activation=classifier_activation, name="predictions"
         )(x)
+
+    if input_tensor is not None:
+        inputs = layer_utils.get_source_inputs(input_tensor)
 
     model = tf.keras.models.Model(inputs=inputs, outputs=x, name=name)
 

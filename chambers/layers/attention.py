@@ -1,9 +1,14 @@
 import math
 
 import tensorflow as tf
-from tensorflow.python.keras.utils import tf_utils
+from packaging import version
 from tensorflow.python.ops import array_ops
 from tensorflow.python.ops import math_ops
+
+if version.parse(tf.__version__) < version.parse("2.4"):
+    from tensorflow.python.keras.utils.tf_utils import smart_cond
+else:
+    from tensorflow.python.keras.utils.control_flow_util import smart_cond
 
 
 @tf.keras.utils.register_keras_serializable(package="Chambers")
@@ -46,7 +51,7 @@ class Attention(tf.keras.layers.Attention):
         def dropped_weights():
             return tf.nn.dropout(weights, rate=self.dropout)
 
-        weights = tf_utils.smart_cond(
+        weights = smart_cond(
             training, dropped_weights, lambda: array_ops.identity(weights)
         )
         return math_ops.matmul(weights, value)

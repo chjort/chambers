@@ -54,7 +54,11 @@ class Attention(tf.keras.layers.Attention):
         weights = smart_cond(
             training, dropped_weights, lambda: array_ops.identity(weights)
         )
-        return math_ops.matmul(weights, value)
+
+        if version.parse(tf.__version__) < version.parse("2.4"):
+            return math_ops.matmul(weights, value)
+        else:
+            return math_ops.matmul(weights, value), weights
 
 
 @tf.keras.utils.register_keras_serializable(package="Chambers")

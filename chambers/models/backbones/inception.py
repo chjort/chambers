@@ -1,6 +1,5 @@
 import tensorflow as tf
 from tensorflow.python.keras.utils import data_utils
-from tensorflow.python.lib.io import file_io
 
 from chambers.augmentations import ImageNetNormalization
 

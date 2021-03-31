@@ -1,5 +1,6 @@
 import tensorflow as tf
 from einops.layers.tensorflow import Rearrange
+from tensorflow.python.keras.applications import imagenet_utils
 
 from chambers.activations import gelu
 from chambers.layers.embedding import (
@@ -9,6 +10,7 @@ from chambers.layers.embedding import (
     LearnedEmbedding0D,
 )
 from chambers.layers.transformer import Encoder, Decoder
+from chambers.utils.layer_utils import inputs_to_input_layer
 
 
 def Seq2SeqTransformer(
@@ -60,22 +62,48 @@ def Seq2SeqTransformer(
 
 
 def VisionTransformer(
-    input_shape,
-    n_classes,
     patch_size,
     patch_dim,
     n_encoder_layers,
     n_heads,
     ff_dim,
+    feature_dim,
     dropout_rate=0.0,
+    input_tensor=None,
+    input_shape=None,
+    include_top=True,
+    pooling=None,
+    classes=1000,
+    classifier_activation=None,
+    name=None,
 ):
-    inputs = tf.keras.layers.Input(input_shape)
+    input_shape = imagenet_utils.obtain_input_shape(
+        input_shape=input_shape,
+        default_size=224,
+        min_size=patch_size,
+        data_format=tf.keras.backend.image_data_format(),
+        require_flatten=False,
+        weights=None,
+    )
+    inputs = inputs_to_input_layer(input_tensor, input_shape)
+
+    if inputs.shape[1] is None or inputs.shape[2] is None:
+        raise ValueError(
+            "Input height and width must be fully specified; got input shape {}.".format(
+                inputs.shape[1:]
+            )
+        )
+
     patch_embeddings = tf.keras.Sequential(
         [
-            Rearrange(
-                "b (h p1) (w p2) c -> b (h w) (p1 p2 c)", p1=patch_size, p2=patch_size
+            tf.keras.layers.Conv2D(
+                filters=patch_dim,
+                kernel_size=patch_size,
+                strides=patch_size,
+                padding="valid",
+                name="embedding",
             ),
-            tf.keras.layers.Dense(patch_dim),
+            tf.keras.layers.Reshape([-1, patch_dim]),
         ],
         name="patch_embeddings",
     )
@@ -101,18 +129,29 @@ def VisionTransformer(
         dense_dropout_rate=dropout_rate,
         norm_output=True,
     )(x)
-    x = tf.keras.layers.Cropping1D((0, x.shape[1] - 1))(x)
-    x = tf.keras.layers.Reshape([-1])(x)
 
-    x = tf.keras.Sequential(
-        [
-            tf.keras.layers.Dense(ff_dim, activation=gelu),
-            tf.keras.layers.Dense(n_classes),
-        ],
-        name="mlp_head",
-    )(x)
+    if pooling == "avg":
+        x = tf.keras.layers.GlobalAveragePooling1D(name="avg_pool")(x)
+    elif pooling == "max":
+        x = tf.keras.layers.GlobalMaxPooling1D(name="max_pool")(x)
+    else:
+        x = tf.keras.Sequential(
+            [
+                tf.keras.layers.Lambda(lambda x: x[:, 0]),
+                tf.keras.layers.Reshape([-1]),
+            ],
+            name="cls_embedding",
+        )(x)
+        x = tf.keras.layers.Dense(
+            units=feature_dim, activation="tanh", name="cls_feature"
+        )(x)
 
-    model = tf.keras.models.Model(inputs, x)
+    if include_top:
+        x = tf.keras.layers.Dense(
+            units=classes, activation=classifier_activation, name="predictions"
+        )(x)
+
+    model = tf.keras.models.Model(inputs=inputs, outputs=x, name=name)
     return model
 
 

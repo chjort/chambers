@@ -24,12 +24,12 @@ def deserialize_object(identifier, module_objects, module_name, **kwargs):
         )
 
 
-def use_mixed_precision(dtype="mixed_float16"):
+def use_mixed_precision(dtype="mixed_float16", set_epsilon=False):
     policy = tf.keras.mixed_precision.experimental.Policy(name=dtype)
     tf.keras.mixed_precision.experimental.set_policy(policy)
     print("Computation dtype:", policy.compute_dtype)
     print("Variable dtype:", policy.variable_dtype)
-    if dtype.endswith("16"):
+    if dtype.endswith("16") and set_epsilon:
         eps = 1e-4
         tf.keras.backend.set_epsilon(eps)
         print("Backend epsilon:", eps)

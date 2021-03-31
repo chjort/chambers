@@ -1,6 +1,6 @@
 import tensorflow as tf
 
-from .tensor import arg_to_gather_nd
+from chambers.utils.tensor import arg_to_gather_nd
 
 
 def score_matrix_to_binary_ranking(

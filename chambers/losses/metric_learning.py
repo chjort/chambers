@@ -3,7 +3,7 @@ from typing import Tuple
 
 import tensorflow as tf
 
-from ..miners import MultiSimilarityMiner as _MSMiner
+from chambers.miners import MultiSimilarityMiner as _MSMiner
 
 
 class PairBasedLoss(tf.keras.losses.Loss, abc.ABC):

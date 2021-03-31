@@ -3,7 +3,7 @@ from typing import List
 import tensorflow as tf
 from tensorflow.python.keras.metrics import MeanMetricWrapper
 
-from .losses.categorical import soft_dice_coefficient as _dsc
+from chambers.losses.categorical import soft_dice_coefficient as _dsc
 
 
 @tf.keras.utils.register_keras_serializable(package="Chambers")

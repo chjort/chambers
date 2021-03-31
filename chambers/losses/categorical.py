@@ -1,7 +1,7 @@
 from typing import List
 
 import tensorflow as tf
-from ..utils.tensor import remove_indices
+from chambers.utils.tensor import remove_indices
 
 
 def soft_dice_coefficient(y_true, y_pred, exclude_classes: List[int] = None):

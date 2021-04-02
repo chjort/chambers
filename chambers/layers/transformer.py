@@ -35,9 +35,7 @@ class EncoderLayer(tf.keras.layers.Layer):
             causal=False,
         )
         self.dropout1 = tf.keras.layers.Dropout(dense_dropout_rate)
-        self.layer_norm_attention = tf.keras.layers.LayerNormalization(
-            epsilon=norm_epsilon
-        )
+        self.norm1 = tf.keras.layers.LayerNormalization(epsilon=norm_epsilon)
 
         # mlp
         self.dense1 = tf.keras.layers.Dense(
@@ -47,7 +45,7 @@ class EncoderLayer(tf.keras.layers.Layer):
             embed_dim, kernel_initializer=dense_kernel_initializer
         )
         self.dropout2 = tf.keras.layers.Dropout(dense_dropout_rate)
-        self.layer_norm_dense = tf.keras.layers.LayerNormalization(epsilon=norm_epsilon)
+        self.norm2 = tf.keras.layers.LayerNormalization(epsilon=norm_epsilon)
 
         self.supports_masking = True
 
@@ -55,11 +53,11 @@ class EncoderLayer(tf.keras.layers.Layer):
         x = inputs
 
         if self.pre_norm:
-            x = x + self._self_attn(self.layer_norm_attention(x), mask, training)
-            x = x + self._mlp(self.layer_norm_dense(x), training)
+            x = x + self._self_attn(self.norm1(x), mask, training)
+            x = x + self._mlp(self.norm2(x), training)
         else:
-            x = self.layer_norm_attention(x + self._self_attn(x, mask, training))
-            x = self.layer_norm_dense(x + self._mlp(x), training)
+            x = self.norm1(x + self._self_attn(x, mask, training))
+            x = self.norm2(x + self._mlp(x, training))
 
         return x
 
@@ -143,9 +141,7 @@ class DecoderLayer(tf.keras.layers.Layer):
             causal=causal,
         )
         self.dropout1 = tf.keras.layers.Dropout(dense_dropout_rate)
-        self.layer_norm_attention1 = tf.keras.layers.LayerNormalization(
-            epsilon=norm_epsilon
-        )
+        self.norm1 = tf.keras.layers.LayerNormalization(epsilon=norm_epsilon)
 
         # cross-attention
         self.multi_head_attention2 = MultiHeadAttention(
@@ -156,9 +152,7 @@ class DecoderLayer(tf.keras.layers.Layer):
             causal=False,
         )
         self.dropout2 = tf.keras.layers.Dropout(dense_dropout_rate)
-        self.layer_norm_attention2 = tf.keras.layers.LayerNormalization(
-            epsilon=norm_epsilon
-        )
+        self.norm2 = tf.keras.layers.LayerNormalization(epsilon=norm_epsilon)
 
         # mlp
         self.dense1 = tf.keras.layers.Dense(
@@ -168,7 +162,7 @@ class DecoderLayer(tf.keras.layers.Layer):
             embed_dim, kernel_initializer=dense_kernel_initializer
         )
         self.dropout3 = tf.keras.layers.Dropout(dense_dropout_rate)
-        self.layer_norm_dense = tf.keras.layers.LayerNormalization(epsilon=norm_epsilon)
+        self.norm3 = tf.keras.layers.LayerNormalization(epsilon=norm_epsilon)
 
         self.supports_masking = True
 
@@ -178,32 +172,31 @@ class DecoderLayer(tf.keras.layers.Layer):
         v_mask = mask[1] if mask else None
 
         if self.pre_norm:
-            x = x + self._self_attn(self.layer_norm_attention1(x), q_mask, training)
+            x = x + self._self_attn(self.norm1(x), q_mask, training)
             x = x + self._cross_attn(
-                self.layer_norm_attention2(x),
-                self.layer_norm_attention2(x_enc),
-                [q_mask, v_mask],
+                self.norm2(x),
+                self.norm2(x_enc),
+                q_mask,
+                v_mask,
                 training,
             )
-            x = x + self._mlp(self.layer_norm_dense(x), training)
+            x = x + self._mlp(self.norm3(x), training)
         else:
-            x = self.layer_norm_attention1(x + self._self_attn(x, q_mask, training))
-            x = self.layer_norm_attention2(
-                x + self._cross_attn(x, x_enc, [q_mask, v_mask], training)
-            )
-            x = self.layer_norm_dense(x + self._mlp(x, training))
+            x = self.norm1(x + self._self_attn(x, q_mask, training))
+            x = self.norm2(x + self._cross_attn(x, x_enc, q_mask, v_mask, training))
+            x = self.norm3(x + self._mlp(x, training))
         return x
 
-    def _self_attn(self, x, mask=None, training=None):
+    def _self_attn(self, q, mask=None, training=None):
         attention = self.multi_head_attention1(
-            [x, x, x], mask=[mask, mask], training=training
+            [q, q, q], mask=[mask, mask], training=training
         )
         attention = self.dropout1(attention, training=training)
         return attention
 
-    def _cross_attn(self, x, x_enc, mask=None, training=None):
+    def _cross_attn(self, q, v, q_mask=None, v_mask=None, training=None):
         attention = self.multi_head_attention2(
-            [x, x_enc, x_enc], mask=mask, training=training
+            [q, v, v], mask=[q_mask, v_mask], training=training
         )
         attention = self.dropout2(attention, training=training)
         return attention

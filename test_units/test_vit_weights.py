@@ -5,7 +5,7 @@ import tensorflow as tf
 import torch
 import timm
 
-from chambers.models.backbones.vision_transformer import ViTB16, ViTB32
+from chambers.models.backbones.vision_transformer import ViTB16, ViTB32, ViTL32, ViTL16
 from chambers import augmentations
 from chambers.utils.generic import url_to_img
 from vit_keras import utils
@@ -53,7 +53,7 @@ def map_encoder_layer(l, idx, wdict):
             wp,
             bp,
         ],
-        l.layer_norm_attention: [
+        l.norm1: [
             wdict[block_name + ".norm1.weight"],
             wdict[block_name + ".norm1.bias"],
         ],
@@ -65,7 +65,7 @@ def map_encoder_layer(l, idx, wdict):
             wdict[block_name + ".mlp.fc2.weight"].transpose(),
             wdict[block_name + ".mlp.fc2.bias"],
         ],
-        l.layer_norm_dense: [
+        l.norm2: [
             wdict[block_name + ".norm2.weight"],
             wdict[block_name + ".norm2.bias"],
         ],
@@ -132,9 +132,13 @@ img_size = 384  # 384
 
 pm = timm.create_model("vit_base_patch16_{}".format(img_size), pretrained=True)
 # pm = timm.create_model("vit_base_patch32_{}".format(img_size), pretrained=True)
+# pm = timm.create_model("vit_large_patch16_{}".format(img_size), pretrained=True)
+# pm = timm.create_model("vit_large_patch32_{}".format(img_size), pretrained=True)
 
 tm = ViTB16(input_shape=(img_size, img_size, 3), include_top=include_top, classes=1000)
+# tm = ViTL16(input_shape=(img_size, img_size, 3), include_top=include_top, classes=1000)
 # tm = ViTB32(input_shape=(img_size, img_size, 3), include_top=include_top, classes=1000)
+# tm = ViTL32(input_shape=(img_size, img_size, 3), include_top=include_top, classes=1000)
 
 weights = pm.state_dict()
 set_pytorch_weights(tm, weights)
@@ -147,7 +151,7 @@ nh = l.multi_head_attention.num_heads
 hdim = l.multi_head_attention.head_dim
 dim = nh * hdim
 
-batch_size = 5
+batch_size = 2
 some_seq_len = 128
 
 # %%
@@ -158,24 +162,24 @@ def check_layers(l, l_idx):
     xp = torch.tensor(x)
 
     pz = pl.norm1(xp).detach().numpy()
-    tz = l.layer_norm_attention(x).numpy()
-    assert np.allclose(pz, tz, atol=1.0e-6)
+    tz = l.norm1(x).numpy()
+    assert np.allclose(pz, tz, atol=1.0e-5), "norm1"
 
     pz = pl.norm2(xp).detach().numpy()
-    tz = l.layer_norm_dense(x).numpy()
-    assert np.allclose(pz, tz, atol=1.0e-5)
+    tz = l.norm2(x).numpy()
+    assert np.allclose(pz, tz, atol=1.0e-5), "norm2"
 
     pz = pl.attn(xp).detach().numpy()
     tz = l.multi_head_attention([x, x, x]).numpy()
-    assert np.allclose(pz, tz, atol=1.0e-4)
+    assert np.allclose(pz, tz, atol=1.0e-4), "mha"
 
     pz = pl.mlp(xp).detach().numpy()
     tz = l.dense2(l.dense1(x)).numpy()
-    assert np.allclose(pz, tz, atol=1.0e-4)
+    assert np.allclose(pz, tz, atol=1.0e-4), "mlp"
 
     pz = pl(xp).detach().numpy()
     tz = l(x).numpy()
-    assert np.allclose(pz, tz, atol=1.0e-4)
+    assert np.allclose(pz, tz, atol=1.0e-3), "layer"
 
 for idx, l in enumerate(tm.get_layer("encoder").layers):
     check_layers(l, idx)
@@ -187,7 +191,7 @@ cx = x.transpose([0, 3, 1, 2])
 pz = pm.patch_embed(torch.tensor(cx)).detach().numpy()
 pt = tm.get_layer("patch_embeddings")(x).numpy()
 
-assert np.allclose(pz, pt, atol=5.0e-4)
+assert np.allclose(pz, pt, atol=1.0e-4)
 
 #%%
 if include_top:

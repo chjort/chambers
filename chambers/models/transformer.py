@@ -31,6 +31,7 @@ def Seq2SeqTransformer(
         num_layers=num_encoder_layers,
         attention_dropout_rate=dropout_rate,
         dense_dropout_rate=dropout_rate,
+        pre_norm=False,
     )(x_enc)
 
     x_dec = tf.keras.layers.Embedding(
@@ -44,6 +45,7 @@ def Seq2SeqTransformer(
         num_layers=num_decoder_layers,
         attention_dropout_rate=dropout_rate,
         dense_dropout_rate=dropout_rate,
+        pre_norm=False,
         norm_output=False,
         causal=True,
     )([x_dec, x_enc])

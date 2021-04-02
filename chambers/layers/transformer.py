@@ -61,19 +61,19 @@ class EncoderLayer(tf.keras.layers.Layer):
 
         return x
 
-    def _self_attn(self, x, mask=None, training=None):
+    def _self_attn(self, q, mask=None, training=None):
         attention = self.multi_head_attention(
-            [x, x, x], mask=[mask, mask], training=training
+            [q, q, q], mask=[mask, mask], training=training
         )
         attention = self.dropout1(attention, training=training)
         return attention
 
     def _mlp(self, x, training=None):
-        dense = self.dense1(x)
+        x = self.dense1(x)
         # TODO: dropout here for ViT?
-        dense = self.dense2(dense)
-        dense = self.dropout2(dense, training=training)
-        return dense
+        x = self.dense2(x)
+        x = self.dropout2(x, training=training)
+        return x
 
     def get_config(self):
         if isinstance(self.dense_kernel_initializer, tf.keras.initializers.Initializer):
@@ -202,10 +202,10 @@ class DecoderLayer(tf.keras.layers.Layer):
         return attention
 
     def _mlp(self, x, training=None):
-        dense = self.dense1(x)
-        dense = self.dense2(dense)
-        dense = self.dropout3(dense, training=training)
-        return dense
+        x = self.dense1(x)
+        x = self.dense2(x)
+        x = self.dropout3(x, training=training)
+        return x
 
     def compute_mask(self, inputs, mask=None):
         if mask:

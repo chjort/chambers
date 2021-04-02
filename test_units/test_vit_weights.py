@@ -90,6 +90,19 @@ def set_numpy_weights(model, wdict):
             wdict["norm.bias"],
         ],
     }
+    # feature/representation
+    try:
+        feature_map = {
+            model.get_layer("feature"): [
+                wdict["pre_logits.fc.weight"].transpose(),
+                wdict["pre_logits.fc.bias"],
+            ]
+        }
+        wmap.update(feature_map)
+    except ValueError:
+        # feature layer does not exist
+        pass
+
     # prediction head
     try:
         head_map = {
@@ -128,17 +141,28 @@ def load_numpy_weights(model, weights_path):
 
 
 include_top = False
-img_size = 384  # 384
+# include_top = False
 
-pm = timm.create_model("vit_base_patch16_{}".format(img_size), pretrained=True)
+img_size = 224
+# img_size = 384
+
+in21k = False
+
+suffix = "_in21k" if in21k else ""
+include_top = False if in21k else include_top
+pm = timm.create_model("vit_base_patch16_{}{}".format(img_size, suffix), pretrained=True)
+
+# pm = timm.create_model("vit_base_patch16_{}".format(img_size), pretrained=True)
 # pm = timm.create_model("vit_base_patch32_{}".format(img_size), pretrained=True)
 # pm = timm.create_model("vit_large_patch16_{}".format(img_size), pretrained=True)
 # pm = timm.create_model("vit_large_patch32_{}".format(img_size), pretrained=True)
 
-tm = ViTB16(input_shape=(img_size, img_size, 3), include_top=include_top, classes=1000)
-# tm = ViTL16(input_shape=(img_size, img_size, 3), include_top=include_top, classes=1000)
-# tm = ViTB32(input_shape=(img_size, img_size, 3), include_top=include_top, classes=1000)
-# tm = ViTL32(input_shape=(img_size, img_size, 3), include_top=include_top, classes=1000)
+feature_dim = pm.pre_logits.fc.out_features if hasattr(pm.pre_logits, "fc") else None
+
+tm = ViTB16(input_shape=(img_size, img_size, 3), include_top=include_top, classes=1000, feature_dim=feature_dim)
+# tm = ViTL16(input_shape=(img_size, img_size, 3), include_top=include_top, classes=1000, feature_dim=feature_dim)
+# tm = ViTB32(input_shape=(img_size, img_size, 3), include_top=include_top, classes=1000, feature_dim=feature_dim)
+# tm = ViTL32(input_shape=(img_size, img_size, 3), include_top=include_top, classes=1000, feature_dim=feature_dim)
 
 weights = pm.state_dict()
 set_pytorch_weights(tm, weights)
@@ -193,6 +217,17 @@ pt = tm.get_layer("patch_embeddings")(x).numpy()
 
 assert np.allclose(pz, pt, atol=1.0e-4)
 
+# %%
+if feature_dim is not None:
+    pfeature = pm.pre_logits
+    tfeature = tm.get_layer("feature")
+
+    x = np.random.uniform(size=(batch_size, dim)).astype(np.float32)
+    pz = pfeature(torch.tensor(x)).detach().numpy()
+    pt = tfeature(x).numpy()
+
+    assert np.allclose(pz, pt, atol=1.0e-6)
+
 #%%
 if include_top:
     phead = pm.head
@@ -234,7 +269,8 @@ import os
 save_dir = "keras_weights"
 
 top = "_no_top" if not include_top else ""
-save_name = "{}_imagenet21k_imagenet_1000_{}{}.h5".format(tm.name, img_size, top)
+in21k_prefix = "_imagenet21k" if in21k else ""
+save_name = "{}{}_imagenet_1000_{}{}.h5".format(tm.name, in21k_prefix, img_size, top)
 
 os.makedirs(save_dir, exist_ok=True)
 tm.save_weights(os.path.join(save_dir, save_name))

@@ -198,11 +198,15 @@ class LearnedEmbedding1D(tf.keras.layers.Layer):
 
     def get_config(self):
         config = {
-            "initializer": self.initializer,  # TODO: serialize
+            "initializer": tf.keras.initializers.serialize(self.initializer),
             "add_to_input": self.add_to_input,
         }
         base_config = super(LearnedEmbedding1D, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
+
+    def from_config(cls, config):
+        config["initializer"] = tf.keras.initializers.deserialize(config["initializer"])
+        return cls(**config)
 
 
 class LearnedEmbedding0D(LearnedEmbedding1D):
@@ -266,7 +270,11 @@ class ConcatEmbedding(tf.keras.layers.Layer):
             "embedding_dim": self.embedding_dim,
             "axis": self.axis,
             "side": self.side,
-            "initializer": self.initializer,  # TODO: serialize
+            "initializer": tf.keras.initializers.serialize(self.initializer),
         }
         base_config = super(ConcatEmbedding, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
+
+    def from_config(cls, config):
+        config["initializer"] = tf.keras.initializers.deserialize(config["initializer"])
+        return cls(**config)

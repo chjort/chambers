@@ -9,19 +9,29 @@ from chambers.utils.layer_utils import inputs_to_input_layer
 BASE_WEIGHTS_PATH = (
     'https://github.com/chjort/chambers/releases/download/v1.0/')
 WEIGHTS_HASHES = {
+    # imagenet21k (pre-trained on imagenet21k)
+    # 'vitb16':
+    #     ('ff0ce1ed5accaad05d113ecef2d29149', '043777781b0d5ca756474d60bf115ef1'),
+    # 'vitb32':
+    #     ('5c31adee48c82a66a32dee3d442f5be8', '1c373b0c196918713da86951d1239007'),
+    # 'vitl16':
+    #     ('96fc14e3a939d4627b0174a0e80c7371', 'f58d4c1a511c7445ab9a2c2b83ee4e7b'),
+    # 'vitl32':
+    #     ('5310dcd58ed573aecdab99f8df1121d5', 'b0f23d2e1cd406d67335fb92d85cc279'),
 
-    'seresnet50':
-        ('ff0ce1ed5accaad05d113ecef2d29149', '043777781b0d5ca756474d60bf115ef1'),
-    'seresnet101':
-        ('5c31adee48c82a66a32dee3d442f5be8', '1c373b0c196918713da86951d1239007'),
-    'seresnet152':
-        ('96fc14e3a939d4627b0174a0e80c7371', 'f58d4c1a511c7445ab9a2c2b83ee4e7b'),
-    'seresnext50':
-        ('5310dcd58ed573aecdab99f8df1121d5', 'b0f23d2e1cd406d67335fb92d85cc279'),
-    'seresnext101':
-        ('be5b26b697a0f7f11efaa1bb6272fc84', 'e48708cbe40071cc3356016c37f6c9c7'),
-    'senet154':
-        ('c8eac0e1940ea4d8a2e0b2eb0cdf4e75', 'd854ff2cd7e6a87b05a8124cd283e0f2'),
+    # imagenet21k+imagenet2012 (pre-trained on imagenet21k and fine-tuned on imagenet2012)
+    # 'vitb16':
+    #     ('ff0ce1ed5accaad05d113ecef2d29149', '043777781b0d5ca756474d60bf115ef1'),
+    # 'vitb32':
+    #     ('5c31adee48c82a66a32dee3d442f5be8', '1c373b0c196918713da86951d1239007'),
+    # 'vitl16':
+    #     ('96fc14e3a939d4627b0174a0e80c7371', 'f58d4c1a511c7445ab9a2c2b83ee4e7b'),
+    # 'vitl32':
+    #     ('5310dcd58ed573aecdab99f8df1121d5', 'b0f23d2e1cd406d67335fb92d85cc279'),
+
+    # imagenet2012
+    # deit
+
 }
 
 def VisionTransformer(
@@ -95,6 +105,7 @@ def VisionTransformer(
         num_layers=n_encoder_layers,
         attention_dropout_rate=dropout_rate,
         dense_dropout_rate=dropout_rate,
+        pre_norm=True,
         norm_output=True,
     )(x)
 

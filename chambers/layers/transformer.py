@@ -15,6 +15,7 @@ class EncoderLayer(tf.keras.layers.Layer):
         attention_dropout_rate=0.1,
         dense_dropout_rate=0.1,
         norm_epsilon=1e-6,
+        pre_norm=False,
     ):
         super(EncoderLayer, self).__init__()
         self.embed_dim = embed_dim
@@ -24,6 +25,7 @@ class EncoderLayer(tf.keras.layers.Layer):
         self.attention_dropout_rate = attention_dropout_rate
         self.dense_dropout_rate = dense_dropout_rate
         self.norm_epsilon = norm_epsilon
+        self.pre_norm = pre_norm
 
         self.multi_head_attention = MultiHeadAttention(
             head_dim=embed_dim // num_heads,
@@ -33,66 +35,77 @@ class EncoderLayer(tf.keras.layers.Layer):
             causal=False,
         )
         self.dropout1 = tf.keras.layers.Dropout(dense_dropout_rate)
-        self.add_attention = tf.keras.layers.Add()
         self.layer_norm_attention = tf.keras.layers.LayerNormalization(
             epsilon=norm_epsilon
         )
 
-        # intermediate
+        # mlp
         self.dense1 = tf.keras.layers.Dense(
             ff_dim, activation=gelu, kernel_initializer=dense_kernel_initializer
         )
-
-        # output
         self.dense2 = tf.keras.layers.Dense(
             embed_dim, kernel_initializer=dense_kernel_initializer
         )
         self.dropout2 = tf.keras.layers.Dropout(dense_dropout_rate)
-        self.add_dense = tf.keras.layers.Add()
         self.layer_norm_dense = tf.keras.layers.LayerNormalization(epsilon=norm_epsilon)
 
         self.supports_masking = True
 
     def call(self, inputs, mask=None, training=None):
-        attention = self.multi_head_attention(
-            [inputs, inputs, inputs], mask=[mask, mask], training=training
-        )
+        x = inputs
 
-        # attention output
-        attention = self.dropout1(attention, training=training)
-        x = self.add_attention([inputs, attention])
-        x = self.layer_norm_attention(x)
-
-        # intermediate
-        dense = self.dense1(x)
-
-        # output
-        dense = self.dense2(dense)
-        dense = self.dropout2(dense, training=training)
-        x = self.add_dense([x, dense])
-        x = self.layer_norm_dense(x)
+        if self.pre_norm:
+            x = x + self._self_attn(self.layer_norm_attention(x), mask, training)
+            x = x + self._mlp(self.layer_norm_dense(x), training)
+        else:
+            x = self.layer_norm_attention(x + self._self_attn(x, mask, training))
+            x = self.layer_norm_dense(x + self._mlp(x), training)
 
         return x
 
+    def _self_attn(self, x, mask=None, training=None):
+        attention = self.multi_head_attention(
+            [x, x, x], mask=[mask, mask], training=training
+        )
+        attention = self.dropout1(attention, training=training)
+        return attention
+
+    def _mlp(self, x, training=None):
+        dense = self.dense1(x)
+        # TODO: dropout here for ViT?
+        dense = self.dense2(dense)
+        dense = self.dropout2(dense, training=training)
+        return dense
+
     def get_config(self):
+        if isinstance(self.dense_kernel_initializer, tf.keras.initializers.Initializer):
+            dense_kernel_initializer = tf.keras.initializers.serialize(
+                self.dense_kernel_initializer
+            )
+        else:
+            dense_kernel_initializer = self.dense_kernel_initializer
+
         config = {
             "embed_dim": self.embed_dim,
             "num_heads": self.num_heads,
             "ff_dim": self.ff_dim,
-            "dense_kernel_initializer": tf.keras.initializers.serialize(
-                self.dense_kernel_initializer
-            ),
+            "dense_kernel_initializer": dense_kernel_initializer,
             "attention_dropout_rate": self.attention_dropout_rate,
             "dense_dropout_rate": self.dense_dropout_rate,
             "norm_epsilon": self.norm_epsilon,
+            "pre_norm": self.pre_norm,
         }
         base_config = super(EncoderLayer, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
     def from_config(cls, config):
-        config["dense_kernel_initializer"] = tf.keras.initializers.deserialize(
-            config["dense_kernel_initializer"]
-        )
+        if isinstance(
+            config["dense_kernel_initializer"], tf.keras.initializers.Initializer
+        ):
+            config["dense_kernel_initializer"] = tf.keras.initializers.deserialize(
+                config["dense_kernel_initializer"]
+            )
+
         return cls(**config)
 
 
@@ -107,6 +120,7 @@ class DecoderLayer(tf.keras.layers.Layer):
         attention_dropout_rate=0.1,
         dense_dropout_rate=0.1,
         norm_epsilon=1e-6,
+        pre_norm=False,
         causal=True,
     ):
         super(DecoderLayer, self).__init__()
@@ -117,6 +131,7 @@ class DecoderLayer(tf.keras.layers.Layer):
         self.attention_dropout_rate = attention_dropout_rate
         self.dense_dropout_rate = dense_dropout_rate
         self.norm_epsilon = norm_epsilon
+        self.pre_norm = pre_norm
         self.causal = causal
 
         # self-attention
@@ -128,7 +143,6 @@ class DecoderLayer(tf.keras.layers.Layer):
             causal=causal,
         )
         self.dropout1 = tf.keras.layers.Dropout(dense_dropout_rate)
-        self.add_attention1 = tf.keras.layers.Add()
         self.layer_norm_attention1 = tf.keras.layers.LayerNormalization(
             epsilon=norm_epsilon
         )
@@ -142,57 +156,63 @@ class DecoderLayer(tf.keras.layers.Layer):
             causal=False,
         )
         self.dropout2 = tf.keras.layers.Dropout(dense_dropout_rate)
-        self.add_attention2 = tf.keras.layers.Add()
         self.layer_norm_attention2 = tf.keras.layers.LayerNormalization(
             epsilon=norm_epsilon
         )
 
-        # intermediate
+        # mlp
         self.dense1 = tf.keras.layers.Dense(
             ff_dim, activation=gelu, kernel_initializer=dense_kernel_initializer
         )
-
-        # output
         self.dense2 = tf.keras.layers.Dense(
             embed_dim, kernel_initializer=dense_kernel_initializer
         )
         self.dropout3 = tf.keras.layers.Dropout(dense_dropout_rate)
-        self.add_dense = tf.keras.layers.Add()
         self.layer_norm_dense = tf.keras.layers.LayerNormalization(epsilon=norm_epsilon)
 
         self.supports_masking = True
 
     def call(self, inputs, mask=None, training=None):
-        x, x_encoder = inputs
+        x, x_enc = inputs
         q_mask = mask[0] if mask else None
         v_mask = mask[1] if mask else None
 
-        # self-attention
+        if self.pre_norm:
+            x = x + self._self_attn(self.layer_norm_attention1(x), q_mask, training)
+            x = x + self._cross_attn(
+                self.layer_norm_attention2(x),
+                self.layer_norm_attention2(x_enc),
+                [q_mask, v_mask],
+                training,
+            )
+            x = x + self._mlp(self.layer_norm_dense(x), training)
+        else:
+            x = self.layer_norm_attention1(x + self._self_attn(x, q_mask, training))
+            x = self.layer_norm_attention2(
+                x + self._cross_attn(x, x_enc, [q_mask, v_mask], training)
+            )
+            x = self.layer_norm_dense(x + self._mlp(x, training))
+        return x
+
+    def _self_attn(self, x, mask=None, training=None):
         attention = self.multi_head_attention1(
-            [x, x, x], mask=[q_mask, q_mask], training=training
+            [x, x, x], mask=[mask, mask], training=training
         )
         attention = self.dropout1(attention, training=training)
-        x = self.add_attention1([x, attention])
-        x = self.layer_norm_attention1(x)
+        return attention
 
-        # cross-attention
+    def _cross_attn(self, x, x_enc, mask=None, training=None):
         attention = self.multi_head_attention2(
-            [x, x_encoder, x_encoder], mask=[q_mask, v_mask], training=training
+            [x, x_enc, x_enc], mask=mask, training=training
         )
         attention = self.dropout2(attention, training=training)
-        x = self.add_attention2([x, attention])
-        x = self.layer_norm_attention2(x)
+        return attention
 
-        # intermediate
+    def _mlp(self, x, training=None):
         dense = self.dense1(x)
-
-        # output
         dense = self.dense2(dense)
         dense = self.dropout3(dense, training=training)
-        x = self.add_dense([x, dense])
-        x = self.layer_norm_dense(x)
-
-        return x
+        return dense
 
     def compute_mask(self, inputs, mask=None):
         if mask:
@@ -203,25 +223,35 @@ class DecoderLayer(tf.keras.layers.Layer):
         return None
 
     def get_config(self):
+        if isinstance(self.dense_kernel_initializer, tf.keras.initializers.Initializer):
+            dense_kernel_initializer = tf.keras.initializers.serialize(
+                self.dense_kernel_initializer
+            )
+        else:
+            dense_kernel_initializer = self.dense_kernel_initializer
+
         config = {
             "embed_dim": self.embed_dim,
             "num_heads": self.num_heads,
             "ff_dim": self.ff_dim,
-            "dense_kernel_initializer": tf.keras.initializers.serialize(
-                self.dense_kernel_initializer
-            ),
+            "dense_kernel_initializer": dense_kernel_initializer,
             "attention_dropout_rate": self.attention_dropout_rate,
             "dense_dropout_rate": self.dense_dropout_rate,
             "norm_epsilon": self.norm_epsilon,
+            "pre_norm": self.pre_norm,
             "causal": self.causal,
         }
         base_config = super(DecoderLayer, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
     def from_config(cls, config):
-        config["dense_kernel_initializer"] = tf.keras.initializers.deserialize(
-            config["dense_kernel_initializer"]
-        )
+        if isinstance(
+            config["dense_kernel_initializer"], tf.keras.initializers.Initializer
+        ):
+            config["dense_kernel_initializer"] = tf.keras.initializers.deserialize(
+                config["dense_kernel_initializer"]
+            )
+
         return cls(**config)
 
 
@@ -237,6 +267,7 @@ class Encoder(tf.keras.layers.Layer):
         attention_dropout_rate=0.1,
         dense_dropout_rate=0.1,
         norm_epsilon=1e-6,
+        pre_norm=False,
         norm_output=False,
         **kwargs
     ):
@@ -248,6 +279,7 @@ class Encoder(tf.keras.layers.Layer):
         self.attention_dropout_rate = attention_dropout_rate
         self.dense_dropout_rate = dense_dropout_rate
         self.norm_epsilon = norm_epsilon
+        self.pre_norm = pre_norm
         self.norm_output = norm_output
 
         if norm_output:
@@ -268,6 +300,7 @@ class Encoder(tf.keras.layers.Layer):
                 attention_dropout_rate=self.attention_dropout_rate,
                 dense_dropout_rate=self.dense_dropout_rate,
                 norm_epsilon=self.norm_epsilon,
+                pre_norm=self.pre_norm,
             )
             for i in range(self.num_layers)
         ]
@@ -284,26 +317,36 @@ class Encoder(tf.keras.layers.Layer):
         return x
 
     def get_config(self):
+        if isinstance(self.dense_kernel_initializer, tf.keras.initializers.Initializer):
+            dense_kernel_initializer = tf.keras.initializers.serialize(
+                self.dense_kernel_initializer
+            )
+        else:
+            dense_kernel_initializer = self.dense_kernel_initializer
+
         config = {
             "embed_dim": self.embed_dim,
             "num_heads": self.num_heads,
             "ff_dim": self.ff_dim,
             "num_layers": self.num_layers,
-            "dense_kernel_initializer": tf.keras.initializers.serialize(
-                self.dense_kernel_initializer
-            ),
+            "dense_kernel_initializer": dense_kernel_initializer,
             "attention_dropout_rate": self.attention_dropout_rate,
             "dense_dropout_rate": self.dense_dropout_rate,
             "norm_epsilon": self.norm_epsilon,
+            "pre_norm": self.pre_norm,
             "norm_output": self.norm_output,
         }
         base_config = super(Encoder, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
     def from_config(cls, config):
-        config["dense_kernel_initializer"] = tf.keras.initializers.deserialize(
-            config["dense_kernel_initializer"]
-        )
+        if isinstance(
+            config["dense_kernel_initializer"], tf.keras.initializers.Initializer
+        ):
+            config["dense_kernel_initializer"] = tf.keras.initializers.deserialize(
+                config["dense_kernel_initializer"]
+            )
+
         return cls(**config)
 
 
@@ -319,6 +362,7 @@ class Decoder(tf.keras.layers.Layer):
         attention_dropout_rate=0.1,
         dense_dropout_rate=0.1,
         norm_epsilon=1e-6,
+        pre_norm=False,
         norm_output=False,
         causal=True,
         return_sequence=False,
@@ -332,6 +376,7 @@ class Decoder(tf.keras.layers.Layer):
         self.attention_dropout_rate = attention_dropout_rate
         self.dense_dropout_rate = dense_dropout_rate
         self.norm_epsilon = norm_epsilon
+        self.pre_norm = pre_norm
         self.norm_output = norm_output
         self.causal = causal
 
@@ -354,6 +399,7 @@ class Decoder(tf.keras.layers.Layer):
                 attention_dropout_rate=self.attention_dropout_rate,
                 dense_dropout_rate=self.dense_dropout_rate,
                 norm_epsilon=self.norm_epsilon,
+                pre_norm=self.pre_norm,
                 causal=self.causal,
             )
             for i in range(self.num_layers)
@@ -389,17 +435,23 @@ class Decoder(tf.keras.layers.Layer):
         return None
 
     def get_config(self):
+        if isinstance(self.dense_kernel_initializer, tf.keras.initializers.Initializer):
+            dense_kernel_initializer = tf.keras.initializers.serialize(
+                self.dense_kernel_initializer
+            )
+        else:
+            dense_kernel_initializer = self.dense_kernel_initializer
+
         config = {
             "embed_dim": self.embed_dim,
             "num_heads": self.num_heads,
             "ff_dim": self.ff_dim,
             "num_layers": self.num_layers,
-            "dense_kernel_initializer": tf.keras.initializers.serialize(
-                self.dense_kernel_initializer
-            ),
+            "dense_kernel_initializer": dense_kernel_initializer,
             "attention_dropout_rate": self.attention_dropout_rate,
             "dense_dropout_rate": self.dense_dropout_rate,
             "norm_epsilon": self.norm_epsilon,
+            "pre_norm": self.pre_norm,
             "norm_output": self.norm_output,
             "causal": self.causal,
             "return_sequence": self.return_sequence,
@@ -408,7 +460,11 @@ class Decoder(tf.keras.layers.Layer):
         return dict(list(base_config.items()) + list(config.items()))
 
     def from_config(cls, config):
-        config["dense_kernel_initializer"] = tf.keras.initializers.deserialize(
-            config["dense_kernel_initializer"]
-        )
+        if isinstance(
+            config["dense_kernel_initializer"], tf.keras.initializers.Initializer
+        ):
+            config["dense_kernel_initializer"] = tf.keras.initializers.deserialize(
+                config["dense_kernel_initializer"]
+            )
+
         return cls(**config)

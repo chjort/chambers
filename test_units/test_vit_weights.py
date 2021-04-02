@@ -8,7 +8,7 @@ import timm
 from chambers.models.backbones.vision_transformer import ViTB16, ViTB32
 from chambers import augmentations
 from chambers.utils.generic import url_to_img
-from vit_keras import vit, utils
+from vit_keras import utils
 
 
 def pth_to_npz(pth_path):

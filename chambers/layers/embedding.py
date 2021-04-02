@@ -197,15 +197,22 @@ class LearnedEmbedding1D(tf.keras.layers.Layer):
             return self.embedding
 
     def get_config(self):
+        if isinstance(self.initializer, tf.keras.initializers.Initializer):
+            initializer = tf.keras.initializers.serialize(self.initializer)
+        else:
+            initializer = self.initializer
+
         config = {
-            "initializer": tf.keras.initializers.serialize(self.initializer),
+            "initializer": initializer,
             "add_to_input": self.add_to_input,
         }
         base_config = super(LearnedEmbedding1D, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
     def from_config(cls, config):
-        config["initializer"] = tf.keras.initializers.deserialize(config["initializer"])
+        if isinstance(config["initializer"], tf.keras.initializers.Initializer):
+            config["initializer"] = tf.keras.initializers.deserialize(config["initializer"])
+
         return cls(**config)
 
 
@@ -265,16 +272,23 @@ class ConcatEmbedding(tf.keras.layers.Layer):
         return self.concat(x)
 
     def get_config(self):
+        if isinstance(self.initializer, tf.keras.initializers.Initializer):
+            initializer = tf.keras.initializers.serialize(self.initializer)
+        else:
+            initializer = self.initializer
+
         config = {
             "n_embeddings": self.n_embeddings,
             "embedding_dim": self.embedding_dim,
             "axis": self.axis,
             "side": self.side,
-            "initializer": tf.keras.initializers.serialize(self.initializer),
+            "initializer": initializer,
         }
         base_config = super(ConcatEmbedding, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
     def from_config(cls, config):
-        config["initializer"] = tf.keras.initializers.deserialize(config["initializer"])
+        if isinstance(config["initializer"], tf.keras.initializers.Initializer):
+            config["initializer"] = tf.keras.initializers.deserialize(config["initializer"])
+
         return cls(**config)

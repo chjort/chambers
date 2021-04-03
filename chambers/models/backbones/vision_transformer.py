@@ -159,23 +159,16 @@ def ViTB16(
 ):
     patch_size = 16
     patch_dim = 768
-
-    # validate input
-    imagenet_utils.obtain_input_shape(
-        input_shape=input_shape,
-        default_size=224,
-        min_size=patch_size,
-        data_format=tf.keras.backend.image_data_format(),
-        require_flatten=include_top,
-        weights=weights,
-    )
+    n_encoder_layers = 12
+    n_heads = 12
+    ff_dim = 3072
 
     vit = VisionTransformer(
         patch_size=patch_size,
         patch_dim=patch_dim,
-        n_encoder_layers=12,
-        n_heads=12,
-        ff_dim=3072,
+        n_encoder_layers=n_encoder_layers,
+        n_heads=n_heads,
+        ff_dim=ff_dim,
         dropout_rate=0.1,
         feature_dim=feature_dim,
         input_tensor=input_tensor,
@@ -202,23 +195,16 @@ def ViTB32(
 ):
     patch_size = 32
     patch_dim = 768
-
-    # validate input
-    imagenet_utils.obtain_input_shape(
-        input_shape=input_shape,
-        default_size=224,
-        min_size=patch_size,
-        data_format=tf.keras.backend.image_data_format(),
-        require_flatten=include_top,
-        weights=weights,
-    )
+    n_encoder_layers = 12
+    n_heads = 12
+    ff_dim = 3072
 
     vit = VisionTransformer(
         patch_size=patch_size,
         patch_dim=patch_dim,
-        n_encoder_layers=12,
-        n_heads=12,
-        ff_dim=3072,
+        n_encoder_layers=n_encoder_layers,
+        n_heads=n_heads,
+        ff_dim=ff_dim,
         dropout_rate=0.1,
         feature_dim=feature_dim,
         input_tensor=input_tensor,
@@ -245,23 +231,16 @@ def ViTL16(
 ):
     patch_size = 16
     patch_dim = 1024
-
-    # validate input
-    imagenet_utils.obtain_input_shape(
-        input_shape=input_shape,
-        default_size=384,
-        min_size=patch_size,
-        data_format=tf.keras.backend.image_data_format(),
-        require_flatten=include_top,
-        weights=weights,
-    )
+    n_encoder_layers = 24
+    n_heads = 16
+    ff_dim = 4096
 
     vit = VisionTransformer(
         patch_size=patch_size,
         patch_dim=patch_dim,
-        n_encoder_layers=24,
-        n_heads=16,
-        ff_dim=4096,
+        n_encoder_layers=n_encoder_layers,
+        n_heads=n_heads,
+        ff_dim=ff_dim,
         dropout_rate=0.1,
         feature_dim=feature_dim,
         input_tensor=input_tensor,
@@ -288,23 +267,16 @@ def ViTL32(
 ):
     patch_size = 32
     patch_dim = 1024
-
-    # validate input
-    imagenet_utils.obtain_input_shape(
-        input_shape=input_shape,
-        default_size=384,
-        min_size=patch_size,
-        data_format=tf.keras.backend.image_data_format(),
-        require_flatten=include_top,
-        weights=weights,
-    )
+    n_encoder_layers = 24
+    n_heads = 16
+    ff_dim = 4096
 
     vit = VisionTransformer(
         patch_size=patch_size,
         patch_dim=patch_dim,
-        n_encoder_layers=24,
-        n_heads=16,
-        ff_dim=4096,
+        n_encoder_layers=n_encoder_layers,
+        n_heads=n_heads,
+        ff_dim=ff_dim,
         dropout_rate=0.1,
         feature_dim=feature_dim,
         input_tensor=input_tensor,

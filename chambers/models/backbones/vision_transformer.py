@@ -3,6 +3,7 @@ from tensorflow.python.keras.applications import imagenet_utils
 from tensorflow.python.keras.utils import data_utils
 from tensorflow.python.keras.utils import layer_utils
 
+from chambers.augmentations import ImageNetNormalization
 from chambers.layers.embedding import ConcatEmbedding, LearnedEmbedding1D
 from chambers.layers.transformer import Encoder
 from chambers.utils.layer_utils import inputs_to_input_layer
@@ -663,3 +664,6 @@ def DeiTB16(
         model_name="deitb16",
     )
     return deit
+
+
+preprocess_input = ImageNetNormalization(mode="tf", name="vit_preprocess")

@@ -511,7 +511,7 @@ MODELS_PARAMS = {
 }
 
 
-def SEResNet50(input_shape=None, input_tensor=None, weights=None, classes=1000, include_top=True, **kwargs):
+def SEResNet50(input_shape=None, input_tensor=None, weights="imagenet", classes=1000, include_top=True, **kwargs):
     return SENet(
         MODELS_PARAMS['seresnet50'],
         input_shape=input_shape,
@@ -523,7 +523,7 @@ def SEResNet50(input_shape=None, input_tensor=None, weights=None, classes=1000, 
     )
 
 
-def SEResNet101(input_shape=None, input_tensor=None, weights=None, classes=1000, include_top=True, **kwargs):
+def SEResNet101(input_shape=None, input_tensor=None, weights="imagenet", classes=1000, include_top=True, **kwargs):
     return SENet(
         MODELS_PARAMS['seresnet101'],
         input_shape=input_shape,
@@ -535,7 +535,7 @@ def SEResNet101(input_shape=None, input_tensor=None, weights=None, classes=1000,
     )
 
 
-def SEResNet152(input_shape=None, input_tensor=None, weights=None, classes=1000, include_top=True, **kwargs):
+def SEResNet152(input_shape=None, input_tensor=None, weights="imagenet", classes=1000, include_top=True, **kwargs):
     return SENet(
         MODELS_PARAMS['seresnet152'],
         input_shape=input_shape,
@@ -547,7 +547,7 @@ def SEResNet152(input_shape=None, input_tensor=None, weights=None, classes=1000,
     )
 
 
-def SEResNeXt50(input_shape=None, input_tensor=None, weights=None, classes=1000, include_top=True, **kwargs):
+def SEResNeXt50(input_shape=None, input_tensor=None, weights="imagenet", classes=1000, include_top=True, **kwargs):
     return SENet(
         MODELS_PARAMS['seresnext50'],
         input_shape=input_shape,
@@ -559,7 +559,7 @@ def SEResNeXt50(input_shape=None, input_tensor=None, weights=None, classes=1000,
     )
 
 
-def SEResNeXt101(input_shape=None, input_tensor=None, weights=None, classes=1000, include_top=True, **kwargs):
+def SEResNeXt101(input_shape=None, input_tensor=None, weights="imagenet", classes=1000, include_top=True, **kwargs):
     return SENet(
         MODELS_PARAMS['seresnext101'],
         input_shape=input_shape,
@@ -571,7 +571,7 @@ def SEResNeXt101(input_shape=None, input_tensor=None, weights=None, classes=1000
     )
 
 
-def SENet154(input_shape=None, input_tensor=None, weights=None, classes=1000, include_top=True, **kwargs):
+def SENet154(input_shape=None, input_tensor=None, weights="imagenet", classes=1000, include_top=True, **kwargs):
     return SENet(
         MODELS_PARAMS['senet154'],
         input_shape=input_shape,

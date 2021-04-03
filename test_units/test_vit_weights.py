@@ -5,7 +5,7 @@ import tensorflow as tf
 import torch
 import timm
 
-from chambers.models.backbones.vision_transformer import ViTB16, ViTB32, ViTL32, ViTL16, DeiTB16
+from chambers.models.backbones.vision_transformer import ViTB16, ViTB32, ViTL32, ViTL16, DeiTB16, ViTS16, DeiTS16
 from chambers import augmentations
 from chambers.utils.generic import url_to_img
 from vit_keras import utils
@@ -166,23 +166,25 @@ def load_numpy_weights(model, weights_path):
 include_top = True
 # include_top = False
 
-# model_name = "vit_base_patch16_224"
+model_name = "vit_base_patch16_224"
 # model_name = "vit_base_patch16_384"
 # model_name = "vit_base_patch32_384"
 # model_name = "vit_large_patch16_224"
 # model_name = "vit_large_patch16_384"
-# model_name = "vit_large_patch32_224"
 # model_name = "vit_large_patch32_384"
 
 # model_name = "vit_base_patch16_224_in21k"
+# model_name = "vit_base_patch32_224_in21k"
 # model_name = "vit_large_patch16_224_in21k"
 # model_name = "vit_large_patch32_224_in21k"
 
+# model_name = "vit_deit_small_patch16_224"
 # model_name = "vit_deit_base_patch16_224"
 # model_name = "vit_deit_base_patch16_384"
 
+# model_name = "vit_deit_small_distilled_patch16_224"
 # model_name = "vit_deit_base_distilled_patch16_224"
-model_name = "vit_deit_base_distilled_patch16_384"
+# model_name = "vit_deit_base_distilled_patch16_384"
 
 pm = timm.create_model(model_name, pretrained=True)
 
@@ -206,8 +208,12 @@ if hasattr(pm.pre_logits, "fc"):
 else:
     feature_dim = None
 
-if size == "base" and patch_size == 16 and distilled:
+if size == "small" and patch_size == 16 and distilled:
+    model = DeiTS16
+elif size == "base" and patch_size == 16 and distilled:
     model = DeiTB16
+elif size == "small" and patch_size == 16:
+    model = ViTS16
 elif size == "base" and patch_size == 16:
     model = ViTB16
 elif size == "base" and patch_size == 32:
@@ -346,8 +352,9 @@ save_dir = "keras_weights"
 
 top = "_no_top" if not include_top else ""
 deit_prefix = "_deit" if deit else ""
-in21k_prefix = "_imagenet21k" if in21k else ""
-save_name = "{}{}{}_imagenet_1000_{}{}.h5".format(tm.name, deit_prefix, in21k_prefix, img_size, top)
+in21k_prefix = "_21k" if in21k else ""
+n_classes = "_1000" if not in21k else ""
+save_name = "{}_imagenet{}{}_{}{}{}.h5".format(tm.name, in21k_prefix, n_classes, img_size, deit_prefix, top)
 
 os.makedirs(save_dir, exist_ok=True)
 tm.save_weights(os.path.join(save_dir, save_name))

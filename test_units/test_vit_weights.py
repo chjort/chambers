@@ -224,9 +224,9 @@ elif size == "large" and patch_size == 32:
     model = ViTL32
 
 if distilled:
-    tm = model(input_shape=(img_size, img_size, 3), include_top=include_top, classes=1000)
+    tm = model(input_shape=(img_size, img_size, 3), include_top=include_top, weights=None, classes=1000)
 else:
-    tm = model(input_shape=(img_size, img_size, 3), include_top=include_top, classes=1000, feature_dim=feature_dim)
+    tm = model(input_shape=(img_size, img_size, 3), include_top=include_top, weights=None, classes=1000, feature_dim=feature_dim)
 
 weights = pm.state_dict()
 set_pytorch_weights(tm, weights)

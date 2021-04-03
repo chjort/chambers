@@ -1,6 +1,5 @@
 import tensorflow as tf
 from tensorflow.python.keras.applications import imagenet_utils
-from tensorflow.python.keras.utils import data_utils
 from tensorflow.python.keras.utils import layer_utils
 
 from chambers.layers.embedding import ConcatEmbedding, LearnedEmbedding1D
@@ -89,15 +88,28 @@ def VisionTransformer(
     elif weights_are_pretrained and has_feature:
         feature_dim = patch_dim
         if include_top:
-            print("Warning: weights '{}' has no top. 'include_top' will be set to False.".format(weights))
+            print(
+                "Warning: weights '{}' has no top. 'include_top' will be set to False.".format(
+                    weights
+                )
+            )
             include_top = False
+
+    if input_shape is not None:
+        default_shape = (default_size, default_size, input_shape[-1])
+        if tuple(input_shape) != default_shape:
+            raise ValueError(
+                "Weights '{}' require `input_shape` to be {}.".format(
+                    weights, default_shape
+                )
+            )
 
     input_shape = imagenet_utils.obtain_input_shape(
         input_shape=input_shape,
         default_size=default_size,
         min_size=patch_size,
         data_format=tf.keras.backend.image_data_format(),
-        require_flatten=include_top,
+        require_flatten=(input_shape is None),
         weights="imagenet" if weights else None,
     )
     inputs = inputs_to_input_layer(input_tensor, input_shape)
@@ -219,12 +231,21 @@ def DistilledVisionTransformer(
 ):
     default_size, has_feature = _get_model_info(weights, model_name)
 
+    if input_shape is not None:
+        default_shape = (default_size, default_size, input_shape[-1])
+        if tuple(input_shape) != default_shape:
+            raise ValueError(
+                "Weights '{}' require `input_shape` to be {}.".format(
+                    weights, default_shape
+                )
+            )
+
     input_shape = imagenet_utils.obtain_input_shape(
         input_shape=input_shape,
         default_size=default_size,
         min_size=patch_size,
         data_format=tf.keras.backend.image_data_format(),
-        require_flatten=include_top,
+        require_flatten=(input_shape is None),
         weights="imagenet" if weights else None,
     )
     inputs = inputs_to_input_layer(input_tensor, input_shape)

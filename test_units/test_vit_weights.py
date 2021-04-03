@@ -5,7 +5,7 @@ import tensorflow as tf
 import torch
 import timm
 
-from chambers.models.backbones.vision_transformer import ViTB16, ViTB32, ViTL32, ViTL16
+from chambers.models.backbones.vision_transformer import ViTB16, ViTB32, ViTL32, ViTL16, DeiTB16
 from chambers import augmentations
 from chambers.utils.generic import url_to_img
 from vit_keras import utils
@@ -90,30 +90,53 @@ def set_numpy_weights(model, wdict):
             wdict["norm.bias"],
         ],
     }
+    # distillation token
+    try:
+        map_ = {
+            model.get_layer("add_dist_token"): [wdict["dist_token"][0]]
+        }
+        wmap.update(map_)
+    except ValueError:
+        # distillation token does not exist
+        pass
+
     # feature/representation
     try:
-        feature_map = {
+        map_ = {
             model.get_layer("feature"): [
                 wdict["pre_logits.fc.weight"].transpose(),
                 wdict["pre_logits.fc.bias"],
             ]
         }
-        wmap.update(feature_map)
+        wmap.update(map_)
     except ValueError:
         # feature layer does not exist
         pass
 
     # prediction head
     try:
-        head_map = {
+        map_ = {
             model.get_layer("predictions"): [
                 wdict["head.weight"].transpose(),
                 wdict["head.bias"],
             ]
         }
-        wmap.update(head_map)
+        wmap.update(map_)
     except ValueError:
         # if "prediction" layer does not exist, assume model was built with include_top=False
+        pass
+
+    # prediction head distillation
+    try:
+        map_ = {
+            model.get_layer("predictions_dist"): [
+                wdict["head_dist.weight"].transpose(),
+                wdict["head_dist.bias"],
+            ]
+        }
+        wmap.update(map_)
+    except ValueError:
+        # distillation head does not exist
         pass
 
     # transformer layers
@@ -140,29 +163,64 @@ def load_numpy_weights(model, weights_path):
     set_numpy_weights(model, wdict)
 
 
-include_top = False
+include_top = True
 # include_top = False
 
-img_size = 224
-# img_size = 384
+# model_name = "vit_base_patch16_224"
+# model_name = "vit_base_patch16_384"
+# model_name = "vit_base_patch32_384"
+# model_name = "vit_large_patch16_224"
+# model_name = "vit_large_patch16_384"
+# model_name = "vit_large_patch32_224"
+# model_name = "vit_large_patch32_384"
 
-in21k = False
+# model_name = "vit_base_patch16_224_in21k"
+# model_name = "vit_large_patch16_224_in21k"
+# model_name = "vit_large_patch32_224_in21k"
 
-suffix = "_in21k" if in21k else ""
+# model_name = "vit_deit_base_patch16_224"
+# model_name = "vit_deit_base_patch16_384"
+
+# model_name = "vit_deit_base_distilled_patch16_224"
+model_name = "vit_deit_base_distilled_patch16_384"
+
+pm = timm.create_model(model_name, pretrained=True)
+
+in21k = model_name.endswith("in21k")
+img_size = int(model_name.rstrip("_in21k")[-3:])
+deit = model_name.lstrip("vit_").startswith("deit")
+distilled = "distilled" in model_name
+
 include_top = False if in21k else include_top
-pm = timm.create_model("vit_base_patch16_{}{}".format(img_size, suffix), pretrained=True)
 
-# pm = timm.create_model("vit_base_patch16_{}".format(img_size), pretrained=True)
-# pm = timm.create_model("vit_base_patch32_{}".format(img_size), pretrained=True)
-# pm = timm.create_model("vit_large_patch16_{}".format(img_size), pretrained=True)
-# pm = timm.create_model("vit_large_patch32_{}".format(img_size), pretrained=True)
+sub_name = model_name.lstrip("vit_").lstrip("deit_")
+size = sub_name.split("_")[0]
 
-feature_dim = pm.pre_logits.fc.out_features if hasattr(pm.pre_logits, "fc") else None
+if distilled:
+    patch_size = int(sub_name.split("_")[2].lstrip("patch"))
+else:
+    patch_size = int(sub_name.split("_")[1].lstrip("patch"))
 
-tm = ViTB16(input_shape=(img_size, img_size, 3), include_top=include_top, classes=1000, feature_dim=feature_dim)
-# tm = ViTL16(input_shape=(img_size, img_size, 3), include_top=include_top, classes=1000, feature_dim=feature_dim)
-# tm = ViTB32(input_shape=(img_size, img_size, 3), include_top=include_top, classes=1000, feature_dim=feature_dim)
-# tm = ViTL32(input_shape=(img_size, img_size, 3), include_top=include_top, classes=1000, feature_dim=feature_dim)
+if hasattr(pm.pre_logits, "fc"):
+    feature_dim = pm.pre_logits.fc.out_features
+else:
+    feature_dim = None
+
+if size == "base" and patch_size == 16 and distilled:
+    model = DeiTB16
+elif size == "base" and patch_size == 16:
+    model = ViTB16
+elif size == "base" and patch_size == 32:
+    model = ViTB32
+elif size == "large" and patch_size == 16:
+    model = ViTL16
+elif size == "large" and patch_size == 32:
+    model = ViTL32
+
+if distilled:
+    tm = model(input_shape=(img_size, img_size, 3), include_top=include_top, classes=1000)
+else:
+    tm = model(input_shape=(img_size, img_size, 3), include_top=include_top, classes=1000, feature_dim=feature_dim)
 
 weights = pm.state_dict()
 set_pytorch_weights(tm, weights)
@@ -239,6 +297,17 @@ if include_top:
 
     assert np.allclose(pz, pt, atol=1.0e-6)
 
+# %%
+if include_top and distilled:
+    phead = pm.head_dist
+    thead = tm.get_layer("predictions_dist")
+
+    x = np.random.uniform(size=(batch_size, dim)).astype(np.float32)
+    pz = phead(torch.tensor(x)).detach().numpy()
+    pt = thead(x).numpy()
+
+    assert np.allclose(pz, pt, atol=1.0e-6)
+
 #%%
 if include_top:
     url = "https://upload.wikimedia.org/wikipedia/commons/d/d7/Granny_smith_and_cross_section.jpg"
@@ -248,20 +317,27 @@ if include_top:
     x = augmentations.Resizing(height=img_size, width=img_size)(img)
     x = augmentations.ImageNetNormalization(mode="tf")(x)
 
-    py = pm(torch.tensor(x.numpy()).permute(0, 3, 1, 2)).detach().numpy()
+    py = pm(torch.tensor(x.numpy()).permute(0, 3, 1, 2))
     ty = tm.predict(x)
-    assert np.allclose(py, ty, atol=1.0e-5)
+    if distilled:
+        py, pyd = py
+        pyd = pyd.detach().numpy()
+        ty, tyd = ty
+        assert np.allclose(pyd, tyd, atol=1.0e-4)
+
+    py = py.detach().numpy()
+    assert np.allclose(py, ty, atol=1.0e-3)
 
     classes = utils.get_imagenet_classes()
     print(classes[py[0].argmax()])  # Granny smith
     print(classes[ty[0].argmax()])  # Granny smith
 
-    import matplotlib.pyplot as plt
-
-    fig, axes = plt.subplots(1, 2)
-    axes[0].plot(tf.nn.softmax(py[0]))
-    axes[1].plot(tf.nn.softmax(ty[0]))
-    plt.show()
+    # import matplotlib.pyplot as plt
+    #
+    # fig, axes = plt.subplots(1, 2)
+    # axes[0].plot(tf.nn.softmax(py[0]))
+    # axes[1].plot(tf.nn.softmax(ty[0]))
+    # plt.show()
 
 #%%
 import os
@@ -269,8 +345,9 @@ import os
 save_dir = "keras_weights"
 
 top = "_no_top" if not include_top else ""
+deit_prefix = "_deit" if deit else ""
 in21k_prefix = "_imagenet21k" if in21k else ""
-save_name = "{}{}_imagenet_1000_{}{}.h5".format(tm.name, in21k_prefix, img_size, top)
+save_name = "{}{}{}_imagenet_1000_{}{}.h5".format(tm.name, deit_prefix, in21k_prefix, img_size, top)
 
 os.makedirs(save_dir, exist_ok=True)
 tm.save_weights(os.path.join(save_dir, save_name))

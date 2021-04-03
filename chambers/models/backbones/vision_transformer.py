@@ -1,5 +1,6 @@
 import tensorflow as tf
 from tensorflow.python.keras.applications import imagenet_utils
+from tensorflow.python.keras.utils import data_utils
 from tensorflow.python.keras.utils import layer_utils
 
 from chambers.layers.embedding import ConcatEmbedding, LearnedEmbedding1D
@@ -9,38 +10,86 @@ from chambers.utils.layer_utils import inputs_to_input_layer
 # imagenet21k (pre-trained on imagenet21k)
 # imagenet21k+ (pre-trained on imagenet21k and fine-tuned on imagenet2012)
 # imagenet (pre-trained on imagenet2012)
-BASE_WEIGHTS_PATH = "https://github.com/chjort/chambers/releases/download/v1.0/"
+BASE_WEIGHTS_PATH = "https://github.com/chjort/chambers/releases/download/v1.1/"
 WEIGHTS_HASHES = {
     # model_name: {weight: (top_hash, no_top_hash, suffix)}
     "vits16": {
-        "imagenet_224_deit": ("", "", "imagenet_1000_224_deit"),
+        "imagenet_224_deit": (
+            "6df5bc5734ace3fc83e4a2e826cfe37c",
+            "3ddca7413a039e9a8979c1718e33c597",
+            "imagenet_1000_224_deit",
+        ),
     },
     "vitb16": {
-        "imagenet21k": (None, "", "imagenet_21k_224"),
-        "imagenet21k+_224": ("", "", "imagenet_21k_1000_224"),
-        "imagenet21k+_384": ("", "", "imagenet_21k_1000_384"),
-        "imagenet_224_deit": ("", "", "imagenet_21k_1000_224_deit"),
-        "imagenet_384_deit": ("", "", "imagenet_21k_1000_384_deit"),
+        "imagenet21k": (None, "7600a249df4c5460e16ee8637a104683", "imagenet_21k_224"),
+        "imagenet21k+_224": (
+            "6c987252c94ae15c34e4b2ef8b69b026",
+            "fb29e40486b4dd1b82ac8635555bed65",
+            "imagenet_21k_1000_224",
+        ),
+        "imagenet21k+_384": (
+            "f189719ecc305d0ccd9525206f741409",
+            "e69336a399b1a334adf72ad237df2c30",
+            "imagenet_21k_1000_384",
+        ),
+        "imagenet_224_deit": (
+            "b313ff9ff936ac4639199e8c28cf2ca4",
+            "600c2033dc9f53181147596c867f62f6",
+            "imagenet_21k_1000_224_deit",
+        ),
+        "imagenet_384_deit": (
+            "134ee39f1a10c276f528b521a4353647",
+            "e3a4c07722b7e3a62cbf4b2c137759e3",
+            "imagenet_21k_1000_384_deit",
+        ),
     },
     "vitb32": {
-        "imagenet21k": (None, "", "imagenet_21k_224"),
-        "imagenet21k+_384": ("", "", "imagenet_21k_1000_384"),
+        "imagenet21k": (None, "14f8c10584cf61786a658723cc8d1b68", "imagenet_21k_224"),
+        "imagenet21k+_384": (
+            "d4b41bf765992566151f5915cc1b275b",
+            "aa8863a833d9e3e592768c5c95d74361",
+            "imagenet_21k_1000_384",
+        ),
     },
     "vitl16": {
-        "imagenet21k": (None, "", "imagenet_21k_224"),
-        "imagenet21k+_224": ("", "", "imagenet_21k_1000_224"),
-        "imagenet21k+_384": ("", "", "imagenet_21k_1000_384"),
+        "imagenet21k": (None, "ad70eb7a7a50daf3c96a790b2f7c38ca", "imagenet_21k_224"),
+        "imagenet21k+_224": (
+            "c39ee61dfd071a1e1a8994fed58dec35",
+            "51dbbcabe79feb81237369909dc14d2e",
+            "imagenet_21k_1000_224",
+        ),
+        "imagenet21k+_384": (
+            "451f946387516c835f576dff7b5074f5",
+            "a0775f7493bd816fcb0513fb813d180c",
+            "imagenet_21k_1000_384",
+        ),
     },
     "vitl32": {
-        "imagenet21k": (None, "", "imagenet_21k_224"),
-        "imagenet21k+_384": ("", "", "imagenet_21k_1000_384"),
+        "imagenet21k": (None, "645d669250d87f5d8ba0a2fb1188c510", "imagenet_21k_224"),
+        "imagenet21k+_384": (
+            "8aacec1f38deaec287b2122ded1bbff4",
+            "6aa0e4197259e0a369972221af546cf0",
+            "imagenet_21k_1000_384",
+        ),
     },
     "deits16": {
-        "imagenet_224": ("", "", "imagenet_1000_224"),
+        "imagenet_224": (
+            "309350442160f3e9bc325a0cdeac49ef",
+            "bf207ba3aeb8ec578eb0c5157192f59c",
+            "imagenet_1000_224",
+        ),
     },
     "deitb16": {
-        "imagenet_224": ("", "", "imagenet_1000_224"),
-        "imagenet_384": ("", "", "imagenet_1000_384"),
+        "imagenet_224": (
+            "898b74940e3a61e90b802dae47af4428",
+            "2ae45d564218b76fea4aa03cc0db279b",
+            "imagenet_1000_224",
+        ),
+        "imagenet_384": (
+            "ca3e7ca40e4b96ead9508ea1e5e35893",
+            "1e3be99ad5acc90101f80e94469c815e",
+            "imagenet_1000_384",
+        ),
     },
 }
 
@@ -198,13 +247,12 @@ def VisionTransformer(
         else:
             file_name = model_name + "_" + file_suffix + "_no_top.h5"
             file_hash = weight_info[1]
-        # weights_path = data_utils.get_file(
-        #     file_name,
-        #     BASE_WEIGHTS_PATH + file_name,
-        #     cache_subdir="models",
-        #     file_hash=file_hash,
-        # )
-        weights_path = "keras_weights/" + file_name
+        weights_path = data_utils.get_file(
+            file_name,
+            BASE_WEIGHTS_PATH + file_name,
+            cache_subdir="models",
+            file_hash=file_hash,
+        )
         model.load_weights(weights_path)
     elif weights is not None:
         model.load_weights(weights)
@@ -353,13 +401,12 @@ def DistilledVisionTransformer(
         else:
             file_name = model_name + "_" + file_suffix + "_no_top.h5"
             file_hash = weight_info[1]
-        # weights_path = data_utils.get_file(
-        #     file_name,
-        #     BASE_WEIGHTS_PATH + file_name,
-        #     cache_subdir="models",
-        #     file_hash=file_hash,
-        # )
-        weights_path = "keras_weights/" + file_name
+        weights_path = data_utils.get_file(
+            file_name,
+            BASE_WEIGHTS_PATH + file_name,
+            cache_subdir="models",
+            file_hash=file_hash,
+        )
         model.load_weights(weights_path)
     elif weights is not None:
         model.load_weights(weights)

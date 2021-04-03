@@ -6,29 +6,61 @@ from chambers.layers.embedding import ConcatEmbedding, LearnedEmbedding1D
 from chambers.layers.transformer import Encoder
 from chambers.utils.layer_utils import inputs_to_input_layer
 
+# imagenet21k (pre-trained on imagenet21k)
+# imagenet21k+ (pre-trained on imagenet21k and fine-tuned on imagenet2012)
+# imagenet (pre-trained on imagenet2012)
 BASE_WEIGHTS_PATH = "https://github.com/chjort/chambers/releases/download/v1.0/"
 WEIGHTS_HASHES = {
-    # imagenet21k (pre-trained on imagenet21k)
-    # 'vitb16':
-    #     ('ff0ce1ed5accaad05d113ecef2d29149', '043777781b0d5ca756474d60bf115ef1'),
-    # 'vitb32':
-    #     ('5c31adee48c82a66a32dee3d442f5be8', '1c373b0c196918713da86951d1239007'),
-    # 'vitl16':
-    #     ('96fc14e3a939d4627b0174a0e80c7371', 'f58d4c1a511c7445ab9a2c2b83ee4e7b'),
-    # 'vitl32':
-    #     ('5310dcd58ed573aecdab99f8df1121d5', 'b0f23d2e1cd406d67335fb92d85cc279'),
-    # imagenet21k+imagenet2012 (pre-trained on imagenet21k and fine-tuned on imagenet2012)
-    # 'vitb16':
-    #     ('ff0ce1ed5accaad05d113ecef2d29149', '043777781b0d5ca756474d60bf115ef1'),
-    # 'vitb32':
-    #     ('5c31adee48c82a66a32dee3d442f5be8', '1c373b0c196918713da86951d1239007'),
-    # 'vitl16':
-    #     ('96fc14e3a939d4627b0174a0e80c7371', 'f58d4c1a511c7445ab9a2c2b83ee4e7b'),
-    # 'vitl32':
-    #     ('5310dcd58ed573aecdab99f8df1121d5', 'b0f23d2e1cd406d67335fb92d85cc279'),
-    # imagenet2012
-    # deit
+    # model_name: {weight: (top_hash, no_top_hash, suffix)}
+    "vits16": {
+        "imagenet_224_deit": ("", "", "imagenet_1000_224_deit"),
+    },
+    "vitb16": {
+        "imagenet21k": (None, "", "imagenet_21k_224"),
+        "imagenet21k+_224": ("", "", "imagenet_21k_1000_224"),
+        "imagenet21k+_384": ("", "", "imagenet_21k_1000_384"),
+        "imagenet_224_deit": ("", "", "imagenet_21k_1000_224_deit"),
+        "imagenet_384_deit": ("", "", "imagenet_21k_1000_384_deit"),
+    },
+    "vitb32": {
+        "imagenet21k": (None, "", "imagenet_21k_224"),
+        "imagenet21k+_384": ("", "", "imagenet_21k_1000_384"),
+    },
+    "vitl16": {
+        "imagenet21k": (None, "", "imagenet_21k_224"),
+        "imagenet21k+_224": ("", "", "imagenet_21k_1000_224"),
+        "imagenet21k+_384": ("", "", "imagenet_21k_1000_384"),
+    },
+    "vitl32": {
+        "imagenet21k": (None, "", "imagenet_21k_224"),
+        "imagenet21k+_384": ("", "", "imagenet_21k_1000_384"),
+    },
+    "deits16": {
+        "imagenet_224": ("", "", "imagenet_1000_224"),
+    },
+    "deitb16": {
+        "imagenet_224": ("", "", "imagenet_1000_224"),
+        "imagenet_384": ("", "", "imagenet_1000_384"),
+    },
 }
+
+
+def _are_weights_pretrained(weights, model_name):
+    return (model_name in WEIGHTS_HASHES) and (weights in WEIGHTS_HASHES[model_name])
+
+
+def _get_model_info(weights, model_name):
+    if _are_weights_pretrained(weights, model_name):
+        weight_info = WEIGHTS_HASHES[model_name][weights]
+        weight_suffix = weight_info[2]
+        weight_suffix = weight_suffix.replace("_deit", "")
+        default_size = int(weight_suffix.split("_")[-1])
+        has_feature = "21k" in weight_suffix and "1000" not in weight_suffix
+    else:
+        default_size = 224
+        has_feature = False
+
+    return default_size, has_feature
 
 
 def VisionTransformer(
@@ -41,23 +73,44 @@ def VisionTransformer(
     input_tensor=None,
     input_shape=None,
     include_top=True,
-    weights=None,
+    weights="imagenet21k+_224",
     pooling=None,
     feature_dim=None,
     classes=1000,
     classifier_activation=None,
-    name=None,
+    model_name=None,
 ):
-    # TODO: validate that feature_dim and weights are mutually exclusive
-    # TODO: if weights are given and feature_dim is None, set appropriate feature_dim
+    weights_are_pretrained = _are_weights_pretrained(weights, model_name)
+    default_size, has_feature = _get_model_info(weights, model_name)
+
+    if weights_are_pretrained and feature_dim is not None:
+        raise ValueError("'weights' and 'feature_dim' are mutually exclusive.")
+    elif weights_are_pretrained and has_feature:
+        feature_dim = patch_dim
+        if include_top:
+            print(
+                "Warning: weights '{}' has no top. 'include_top' will be set to False.".format(
+                    weights
+                )
+            )
+            include_top = False
+
+    if input_shape is not None:
+        default_shape = (default_size, default_size, input_shape[-1])
+        if tuple(input_shape) != default_shape:
+            raise ValueError(
+                "Weights '{}' require `input_shape` to be {}.".format(
+                    weights, default_shape
+                )
+            )
 
     input_shape = imagenet_utils.obtain_input_shape(
         input_shape=input_shape,
-        default_size=224,
+        default_size=default_size,
         min_size=patch_size,
         data_format=tf.keras.backend.image_data_format(),
-        require_flatten=include_top,
-        weights=weights,
+        require_flatten=(input_shape is None),
+        weights="imagenet" if weights else None,
     )
     inputs = inputs_to_input_layer(input_tensor, input_shape)
 
@@ -87,11 +140,11 @@ def VisionTransformer(
         embedding_dim=patch_dim,
         side="left",
         axis=1,
-        initializer="zeros",
+        initializer=tf.keras.initializers.TruncatedNormal(stddev=0.02),
         name="add_cls_token",
     )(x)
     x = LearnedEmbedding1D(
-        initializer=tf.keras.initializers.RandomNormal(stddev=0.06),
+        initializer=tf.keras.initializers.TruncatedNormal(stddev=0.02),
         name="pos_embedding",
     )(x)
     x = tf.keras.layers.Dropout(dropout_rate)(x)
@@ -134,12 +187,27 @@ def VisionTransformer(
     if input_tensor is not None:
         inputs = layer_utils.get_source_inputs(input_tensor)
 
-    model = tf.keras.models.Model(inputs=inputs, outputs=x, name=name)
+    model = tf.keras.models.Model(inputs=inputs, outputs=x, name=model_name)
 
-    if weights:
-        # TODO: load pretrained weights
-
-        pass
+    if weights_are_pretrained:
+        weight_info = WEIGHTS_HASHES[model_name][weights]
+        file_suffix = weight_info[2]
+        if include_top:
+            file_name = model_name + "_" + file_suffix + ".h5"
+            file_hash = weight_info[0]
+        else:
+            file_name = model_name + "_" + file_suffix + "_no_top.h5"
+            file_hash = weight_info[1]
+        # weights_path = data_utils.get_file(
+        #     file_name,
+        #     BASE_WEIGHTS_PATH + file_name,
+        #     cache_subdir="models",
+        #     file_hash=file_hash,
+        # )
+        weights_path = "keras_weights/" + file_name
+        model.load_weights(weights_path)
+    elif weights is not None:
+        model.load_weights(weights)
 
     return model
 
@@ -155,19 +223,30 @@ def DistilledVisionTransformer(
     input_tensor=None,
     input_shape=None,
     include_top=True,
-    weights=None,
+    weights="imagenet_224",
     pooling=None,
     classes=1000,
     classifier_activation=None,
-    name=None,
+    model_name=None,
 ):
+    default_size, has_feature = _get_model_info(weights, model_name)
+
+    if input_shape is not None:
+        default_shape = (default_size, default_size, input_shape[-1])
+        if tuple(input_shape) != default_shape:
+            raise ValueError(
+                "Weights '{}' require `input_shape` to be {}.".format(
+                    weights, default_shape
+                )
+            )
+
     input_shape = imagenet_utils.obtain_input_shape(
         input_shape=input_shape,
-        default_size=224,
+        default_size=default_size,
         min_size=patch_size,
         data_format=tf.keras.backend.image_data_format(),
-        require_flatten=include_top,
-        weights=weights,
+        require_flatten=(input_shape is None),
+        weights="imagenet" if weights else None,
     )
     inputs = inputs_to_input_layer(input_tensor, input_shape)
 
@@ -197,7 +276,7 @@ def DistilledVisionTransformer(
         embedding_dim=patch_dim,
         side="left",
         axis=1,
-        initializer="zeros",
+        initializer=tf.keras.initializers.TruncatedNormal(stddev=0.02),
         name="add_dist_token",
     )(x)
     x = ConcatEmbedding(
@@ -205,11 +284,11 @@ def DistilledVisionTransformer(
         embedding_dim=patch_dim,
         side="left",
         axis=1,
-        initializer="zeros",
+        initializer=tf.keras.initializers.TruncatedNormal(stddev=0.02),
         name="add_cls_token",
     )(x)
     x = LearnedEmbedding1D(
-        initializer=tf.keras.initializers.RandomNormal(stddev=0.06),
+        initializer=tf.keras.initializers.TruncatedNormal(stddev=0.02),
         name="pos_embedding",
     )(x)
     x = tf.keras.layers.Dropout(dropout_rate)(x)
@@ -263,21 +342,71 @@ def DistilledVisionTransformer(
     else:
         x = tf.keras.layers.Average()([x_cls, x_dist])
 
-    model = tf.keras.models.Model(inputs=inputs, outputs=x, name=name)
+    model = tf.keras.models.Model(inputs=inputs, outputs=x, name=model_name)
 
-    if weights:
-        # TODO: load pretrained weights
-
-        pass
-
+    if _are_weights_pretrained(weights, model_name):
+        weight_info = WEIGHTS_HASHES[model_name][weights]
+        file_suffix = weight_info[2]
+        if include_top:
+            file_name = model_name + "_" + file_suffix + ".h5"
+            file_hash = weight_info[0]
+        else:
+            file_name = model_name + "_" + file_suffix + "_no_top.h5"
+            file_hash = weight_info[1]
+        # weights_path = data_utils.get_file(
+        #     file_name,
+        #     BASE_WEIGHTS_PATH + file_name,
+        #     cache_subdir="models",
+        #     file_hash=file_hash,
+        # )
+        weights_path = "keras_weights/" + file_name
+        model.load_weights(weights_path)
+    elif weights is not None:
+        model.load_weights(weights)
     return model
+
+
+def ViTS16(
+    input_tensor=None,
+    input_shape=None,
+    include_top=True,
+    weights="imagenet_224_deit",
+    pooling=None,
+    feature_dim=None,
+    classes=1000,
+    classifier_activation=None,
+):
+    patch_size = 16
+    patch_dim = 384
+    n_encoder_layers = 12
+    n_heads = 6
+    ff_dim = 1536
+
+    vit = VisionTransformer(
+        patch_size=patch_size,
+        patch_dim=patch_dim,
+        n_encoder_layers=n_encoder_layers,
+        n_heads=n_heads,
+        ff_dim=ff_dim,
+        dropout_rate=0.1,
+        feature_dim=feature_dim,
+        input_tensor=input_tensor,
+        input_shape=input_shape,
+        include_top=include_top,
+        weights=weights,
+        pooling=pooling,
+        classes=classes,
+        classifier_activation=classifier_activation,
+        model_name="vits16",
+    )
+    return vit
 
 
 def ViTB16(
     input_tensor=None,
     input_shape=None,
     include_top=True,
-    weights=None,
+    weights="imagenet21k+_224",
     pooling=None,
     feature_dim=None,
     classes=1000,
@@ -304,7 +433,7 @@ def ViTB16(
         pooling=pooling,
         classes=classes,
         classifier_activation=classifier_activation,
-        name="vitb16",
+        model_name="vitb16",
     )
     return vit
 
@@ -313,7 +442,7 @@ def ViTB32(
     input_tensor=None,
     input_shape=None,
     include_top=True,
-    weights=None,
+    weights="imagenet21k+_384",
     pooling=None,
     feature_dim=None,
     classes=1000,
@@ -340,7 +469,7 @@ def ViTB32(
         pooling=pooling,
         classes=classes,
         classifier_activation=classifier_activation,
-        name="vitb32",
+        model_name="vitb32",
     )
     return vit
 
@@ -349,7 +478,7 @@ def ViTL16(
     input_tensor=None,
     input_shape=None,
     include_top=True,
-    weights=None,
+    weights="imagenet21k+_224",
     pooling=None,
     feature_dim=None,
     classes=1000,
@@ -376,7 +505,7 @@ def ViTL16(
         pooling=pooling,
         classes=classes,
         classifier_activation=classifier_activation,
-        name="vitl16",
+        model_name="vitl16",
     )
     return vit
 
@@ -385,7 +514,7 @@ def ViTL32(
     input_tensor=None,
     input_shape=None,
     include_top=True,
-    weights=None,
+    weights="imagenet21k+_384",
     pooling=None,
     feature_dim=None,
     classes=1000,
@@ -412,9 +541,45 @@ def ViTL32(
         pooling=pooling,
         classes=classes,
         classifier_activation=classifier_activation,
-        name="vitl32",
+        model_name="vitl32",
     )
     return vit
+
+
+def DeiTS16(
+    return_dist_token=True,
+    input_tensor=None,
+    input_shape=None,
+    include_top=True,
+    weights="imagenet_224",
+    pooling=None,
+    classes=1000,
+    classifier_activation=None,
+):
+    patch_size = 16
+    patch_dim = 384
+    n_encoder_layers = 12
+    n_heads = 6
+    ff_dim = 1536
+
+    deit = DistilledVisionTransformer(
+        patch_size=patch_size,
+        patch_dim=patch_dim,
+        n_encoder_layers=n_encoder_layers,
+        n_heads=n_heads,
+        ff_dim=ff_dim,
+        dropout_rate=0.1,
+        return_dist_token=return_dist_token,
+        input_tensor=input_tensor,
+        input_shape=input_shape,
+        include_top=include_top,
+        weights=weights,
+        pooling=pooling,
+        classes=classes,
+        classifier_activation=classifier_activation,
+        model_name="deits16",
+    )
+    return deit
 
 
 def DeiTB16(
@@ -422,7 +587,7 @@ def DeiTB16(
     input_tensor=None,
     input_shape=None,
     include_top=True,
-    weights=None,
+    weights="imagenet_224",
     pooling=None,
     classes=1000,
     classifier_activation=None,
@@ -448,6 +613,6 @@ def DeiTB16(
         pooling=pooling,
         classes=classes,
         classifier_activation=classifier_activation,
-        name="deitb16",
+        model_name="deitb16",
     )
     return deit

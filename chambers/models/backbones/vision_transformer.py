@@ -113,6 +113,58 @@ def _get_model_info(weights, model_name):
     return default_size, has_feature
 
 
+def _obtain_inputs(input_tensor, input_shape, default_size, min_size, weights):
+    if input_shape is not None:
+        default_shape = (default_size, default_size, input_shape[-1])
+        if tuple(input_shape) != default_shape:
+            raise ValueError(
+                "Weights '{}' require `input_shape` to be {}.".format(
+                    weights, default_shape
+                )
+            )
+
+    input_shape = imagenet_utils.obtain_input_shape(
+        input_shape=input_shape,
+        default_size=default_size,
+        min_size=min_size,
+        data_format=tf.keras.backend.image_data_format(),
+        require_flatten=(input_shape is None),
+        weights="imagenet" if weights else None,
+    )
+    inputs = inputs_to_input_layer(input_tensor, input_shape)
+
+    if None in inputs.shape[1:]:
+        raise ValueError(
+            "Input shape must be fully specified; got input shape {}.".format(
+                inputs.shape[1:]
+            )
+        )
+    return inputs
+
+
+def _load_weights(model, weights, include_top):
+    model_name = model.name
+
+    if _are_weights_pretrained(weights, model_name):
+        weight_info = WEIGHTS_HASHES[model_name][weights]
+        file_suffix = weight_info[2]
+        if include_top:
+            file_name = model_name + "_" + file_suffix + ".h5"
+            file_hash = weight_info[0]
+        else:
+            file_name = model_name + "_" + file_suffix + "_no_top.h5"
+            file_hash = weight_info[1]
+        weights_path = data_utils.get_file(
+            file_name,
+            BASE_WEIGHTS_PATH + file_name,
+            cache_subdir="models",
+            file_hash=file_hash,
+        )
+        model.load_weights(weights_path)
+    elif weights is not None:
+        model.load_weights(weights)
+
+
 def VisionTransformer(
     patch_size,
     patch_dim,
@@ -145,31 +197,13 @@ def VisionTransformer(
             )
             include_top = False
 
-    if input_shape is not None:
-        default_shape = (default_size, default_size, input_shape[-1])
-        if tuple(input_shape) != default_shape:
-            raise ValueError(
-                "Weights '{}' require `input_shape` to be {}.".format(
-                    weights, default_shape
-                )
-            )
-
-    input_shape = imagenet_utils.obtain_input_shape(
-        input_shape=input_shape,
+    inputs = _obtain_inputs(
+        input_tensor,
+        input_shape,
         default_size=default_size,
         min_size=patch_size,
-        data_format=tf.keras.backend.image_data_format(),
-        require_flatten=(input_shape is None),
-        weights="imagenet" if weights else None,
+        weights=weights,
     )
-    inputs = inputs_to_input_layer(input_tensor, input_shape)
-
-    if None in inputs.shape[1:]:
-        raise ValueError(
-            "Input shape must be fully specified; got input shape {}.".format(
-                inputs.shape[1:]
-            )
-        )
 
     patch_embeddings = tf.keras.Sequential(
         [
@@ -239,24 +273,7 @@ def VisionTransformer(
 
     model = tf.keras.models.Model(inputs=inputs, outputs=x, name=model_name)
 
-    if weights_are_pretrained:
-        weight_info = WEIGHTS_HASHES[model_name][weights]
-        file_suffix = weight_info[2]
-        if include_top:
-            file_name = model_name + "_" + file_suffix + ".h5"
-            file_hash = weight_info[0]
-        else:
-            file_name = model_name + "_" + file_suffix + "_no_top.h5"
-            file_hash = weight_info[1]
-        weights_path = data_utils.get_file(
-            file_name,
-            BASE_WEIGHTS_PATH + file_name,
-            cache_subdir="models",
-            file_hash=file_hash,
-        )
-        model.load_weights(weights_path)
-    elif weights is not None:
-        model.load_weights(weights)
+    _load_weights(model, weights, include_top)
 
     return model
 
@@ -280,31 +297,13 @@ def DistilledVisionTransformer(
 ):
     default_size, has_feature = _get_model_info(weights, model_name)
 
-    if input_shape is not None:
-        default_shape = (default_size, default_size, input_shape[-1])
-        if tuple(input_shape) != default_shape:
-            raise ValueError(
-                "Weights '{}' require `input_shape` to be {}.".format(
-                    weights, default_shape
-                )
-            )
-
-    input_shape = imagenet_utils.obtain_input_shape(
-        input_shape=input_shape,
+    inputs = _obtain_inputs(
+        input_tensor,
+        input_shape,
         default_size=default_size,
         min_size=patch_size,
-        data_format=tf.keras.backend.image_data_format(),
-        require_flatten=(input_shape is None),
-        weights="imagenet" if weights else None,
+        weights=weights,
     )
-    inputs = inputs_to_input_layer(input_tensor, input_shape)
-
-    if None in inputs.shape[1:]:
-        raise ValueError(
-            "Input shape must be fully specified; got input shape {}.".format(
-                inputs.shape[1:]
-            )
-        )
 
     patch_embeddings = tf.keras.Sequential(
         [
@@ -393,24 +392,8 @@ def DistilledVisionTransformer(
 
     model = tf.keras.models.Model(inputs=inputs, outputs=x, name=model_name)
 
-    if _are_weights_pretrained(weights, model_name):
-        weight_info = WEIGHTS_HASHES[model_name][weights]
-        file_suffix = weight_info[2]
-        if include_top:
-            file_name = model_name + "_" + file_suffix + ".h5"
-            file_hash = weight_info[0]
-        else:
-            file_name = model_name + "_" + file_suffix + "_no_top.h5"
-            file_hash = weight_info[1]
-        weights_path = data_utils.get_file(
-            file_name,
-            BASE_WEIGHTS_PATH + file_name,
-            cache_subdir="models",
-            file_hash=file_hash,
-        )
-        model.load_weights(weights_path)
-    elif weights is not None:
-        model.load_weights(weights)
+    _load_weights(model, weights, include_top)
+
     return model
 
 

@@ -113,8 +113,8 @@ def _get_model_info(weights, model_name):
     return default_size, has_feature
 
 
-def _obtain_inputs(input_tensor, input_shape, default_size, min_size, weights):
-    if input_shape is not None:
+def _obtain_inputs(input_tensor, input_shape, default_size, min_size, weights, model_name, name=None):
+    if input_shape is not None and _are_weights_pretrained(weights, model_name):
         default_shape = (default_size, default_size, input_shape[-1])
         if tuple(input_shape) != default_shape:
             raise ValueError(
@@ -131,7 +131,7 @@ def _obtain_inputs(input_tensor, input_shape, default_size, min_size, weights):
         require_flatten=(input_shape is None),
         weights="imagenet" if weights else None,
     )
-    inputs = inputs_to_input_layer(input_tensor, input_shape)
+    inputs = inputs_to_input_layer(input_tensor, input_shape, name)
 
     if None in inputs.shape[1:]:
         raise ValueError(
@@ -203,6 +203,7 @@ def VisionTransformer(
         default_size=default_size,
         min_size=patch_size,
         weights=weights,
+        model_name=model_name,
     )
 
     patch_embeddings = tf.keras.Sequential(
@@ -303,6 +304,7 @@ def DistilledVisionTransformer(
         default_size=default_size,
         min_size=patch_size,
         weights=weights,
+        model_name=model_name,
     )
 
     patch_embeddings = tf.keras.Sequential(

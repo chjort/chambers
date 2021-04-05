@@ -122,7 +122,7 @@ class DecoderLayer(tf.keras.layers.Layer):
         causal=True,
     ):
         super(DecoderLayer, self).__init__()
-        self.embed_dim = embed_dim
+        self.embed_dim = embed_dim  # TODO: get embed_dim from inputs_shape passed to build and remove this argument.
         self.num_heads = num_heads
         self.ff_dim = ff_dim
         self.dense_kernel_initializer = dense_kernel_initializer

@@ -106,7 +106,8 @@ class MultiHeadAttention(tf.keras.layers.Layer):
         self.permute_mask = tf.keras.layers.Permute((2, 1))
 
     def build(self, input_shape):
-        (b, _, d) = input_shape[0]
+        d = input_shape[0][-1]
+
         self.w_query = self.add_weight(
             name="w_query",
             shape=(d, self.num_heads, self.head_dim),

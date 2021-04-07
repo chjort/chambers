@@ -1,3 +1,4 @@
+import math
 import tensorflow as tf
 
 
@@ -34,30 +35,6 @@ class L1Distance(Distance):
 
 
 @tf.keras.utils.register_keras_serializable(package="Chambers")
-class CosineDistance(Distance):
-    """
-    Cosine distance layer
-
-    This layer takes as input a list of two vectors [v1, v2] and computes
-    the Cosine distance between v1 and v2 according to the following equation:
-
-            cosine similarity = (v1 . v2) / (||v1|| * ||v2||)
-
-            cosine distance = 1 - cosine similarity
-
-    """
-
-    def call(self, inputs, **kwargs):
-        v1, v2 = inputs
-        v1 = tf.nn.l2_normalize(v1, axis=self.axis)
-        v2 = tf.nn.l2_normalize(v2, axis=self.axis)
-        x = v1 * v2
-        x = tf.reduce_sum(x, axis=self.axis, keepdims=self.keepdims)
-        x = 1 - x
-        return x
-
-
-@tf.keras.utils.register_keras_serializable(package="Chambers")
 class L2Distance(Distance):
     """
     L2 distance layer. Also knows as Euclidean distance.
@@ -76,3 +53,49 @@ class L2Distance(Distance):
         x = tf.reduce_sum(x, axis=self.axis, keepdims=self.keepdims)
         x = tf.sqrt(x)
         return x
+
+
+@tf.keras.utils.register_keras_serializable(package="Chambers")
+class CosineSimilarity(Distance):
+    """
+    Cosine distance layer
+
+    This layer takes as input a list of two vectors [v1, v2] and computes
+    the Cosine distance between v1 and v2 according to the following equation:
+
+            cosine similarity = (v1 . v2) / (||v1|| * ||v2||)
+
+            cosine distance = -cosine similarity
+
+    """
+
+    def call(self, inputs, **kwargs):
+        a, b = inputs
+        x = self._cosine_similarity(a, b)
+        return self._scale(x)
+
+    def _cosine_similarity(self, a, b):
+        tf.keras.losses.cosine_similarity
+        a = tf.nn.l2_normalize(a, axis=self.axis)
+        b = tf.nn.l2_normalize(b, axis=self.axis)
+        x = a * b
+        x = tf.reduce_sum(x, axis=self.axis, keepdims=self.keepdims)
+        return x
+
+    def _scale(self, cos_sim):
+        return (cos_sim + 1) / 2
+
+
+class AngularCosineSimilarity(CosineSimilarity):
+    def _scale(self, cos_sim):
+        return 1 - tf.math.acos(cos_sim) / math.pi
+
+
+class CubicCosineSimilarity(CosineSimilarity):
+    def _scale(self, cos_sim):
+        return 0.5 + 0.25 * cos_sim + 0.25 * tf.pow(cos_sim, 3)
+
+
+class SqrtCosineSimilarity(CosineSimilarity):
+    def _scale(self, cos_sim):
+        return 1 - tf.sqrt((1 - cos_sim) / 2)

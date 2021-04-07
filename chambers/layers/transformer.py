@@ -397,6 +397,7 @@ class Decoder(tf.keras.layers.Layer):
             )
             for i in range(self.num_layers)
         ]
+        super(Decoder, self).build(input_shape)
 
     def call(self, inputs, mask=None, training=None, **kwargs):
         x, x_encoder = inputs

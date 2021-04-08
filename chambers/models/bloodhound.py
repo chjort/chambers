@@ -393,7 +393,7 @@ def Bloodhound4D(
     )
     q_enc = enc(inputs_q)
     c_enc = enc(inputs_c)
-    # TODO: positional embedding here too?
+    # NOTE: positional embedding here if encoder is not a transformer
     q_enc = tf.keras.layers.Lambda(lambda x: tf.expand_dims(x, 1), name="q_expand")(
         q_enc
     )

@@ -70,33 +70,27 @@ class PairLoss(tf.keras.losses.Loss, abc.ABC):
         :return: Positive pairs and negative pairs as a tuple of 2D RaggedTensors each with shape [n, 0... n].
         """
         y_true = tf.reshape(y_true, [-1, 1])
-        pos_pair_mask = tf.cast(tf.equal(y_true, tf.transpose(y_true)), tf.uint8)
-        neg_pair_mask = 1 - pos_pair_mask
+        pos_pair_mask = tf.equal(y_true, tf.transpose(y_true))
+        neg_pair_mask = tf.logical_not(pos_pair_mask)
 
         if self.ignore_negative_labels:
-            not_triplet_neg = tf.cast(tf.greater_equal(y_true, 0), tf.uint8)
-            pos_pair_mask = pos_pair_mask * not_triplet_neg
-            neg_pair_mask = neg_pair_mask * not_triplet_neg
+            not_triplet_neg = tf.greater_equal(y_true, 0)
+            pos_pair_mask = pos_pair_mask & not_triplet_neg
+            neg_pair_mask = neg_pair_mask & not_triplet_neg
 
         if self.ignore_diag:
             # ignore mirror pairs
             nrows = tf.shape(similarity_matrix)[0]
             ncols = tf.shape(similarity_matrix)[1]
-            inverse_eye = 1 - tf.eye(nrows, ncols, dtype=tf.uint8)
-            pos_pair_mask = pos_pair_mask * inverse_eye
-            neg_pair_mask = neg_pair_mask * inverse_eye
+            inverse_eye = tf.logical_not(tf.eye(nrows, ncols, dtype=tf.bool))
+            pos_pair_mask = pos_pair_mask & inverse_eye
+            neg_pair_mask = neg_pair_mask & inverse_eye
 
         # get similarities of positive pairs
-        pos_mat = tf.RaggedTensor.from_row_lengths(
-            values=similarity_matrix[tf.cast(pos_pair_mask, tf.bool)],
-            row_lengths=tf.cast(tf.reduce_sum(pos_pair_mask, axis=1), tf.int32),
-        )
+        pos_mat = tf.ragged.boolean_mask(similarity_matrix, pos_pair_mask)
 
         # get similarities of negative pairs
-        neg_mat = tf.RaggedTensor.from_row_lengths(
-            values=similarity_matrix[tf.cast(neg_pair_mask, tf.bool)],
-            row_lengths=tf.cast(tf.reduce_sum(neg_pair_mask, axis=1), tf.int32),
-        )
+        neg_mat = tf.ragged.boolean_mask(similarity_matrix, neg_pair_mask)
 
         return pos_mat, neg_mat
 

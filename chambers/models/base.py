@@ -2,7 +2,13 @@ import tensorflow as tf
 from tensorflow.python.keras.engine import data_adapter
 
 
-class PredictDataModel(tf.keras.Model):
+class BaseModel(tf.keras.Model):
+    @classmethod
+    def from_model(cls, model):
+        return cls(inputs=model.inputs, outputs=model.outputs, name=model.name)
+
+
+class PredictDataModel(BaseModel):
     def predict_step(self, data):
         """The logic for one inference step.
 

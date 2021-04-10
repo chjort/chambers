@@ -290,6 +290,7 @@ class MultiHeadAttention4D(MultiHeadAttention):
 
         # TODO: Mask
 
+        # TODO: Make attention attend across query batch (b) dimension for each candidate
         attention = self.attention([query, value, key], mask=mask, training=training)
 
         # linear projection + head merge

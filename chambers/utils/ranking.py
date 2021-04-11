@@ -22,3 +22,14 @@ def score_matrix_to_binary_ranking(
     )
 
     return binary_ranking
+
+
+def rank_labels(y, scores, remove_top1=False):
+    index_ranking = tf.argsort(scores, axis=1, direction="DESCENDING")
+
+    if remove_top1:
+        index_ranking = index_ranking[:, 1:]
+
+    gather_idx = arg_to_gather_nd(index_ranking)
+    ranking = tf.reshape(tf.gather_nd(y, gather_idx), index_ranking.shape)
+    return ranking, index_ranking

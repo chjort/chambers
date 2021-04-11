@@ -1,12 +1,15 @@
+import math
+
 import tensorflow as tf
 
 from chambers.layers.attention import MultiHeadAttention
+from chambers.layers.distance import CosineSimilarity
+from chambers.layers.normalization import L2Normalization
 from chambers.layers.reduce import Sum
 from chambers.layers.transformer import Decoder, DecoderLayer
 from chambers.models import backbones
 from chambers.models.backbones.vision_transformer import _obtain_inputs
-from chambers.layers.normalization import L2Normalization
-from chambers.layers.distance import CosineSimilarity
+from chambers.models.base import PredictDataModel
 
 
 def _pool(x, method=None, prefix=""):
@@ -432,3 +435,128 @@ def Bloodhound4D(
 
     model = tf.keras.Model(inputs=[inputs_q, inputs_c], outputs=x, name=model_name)
     return model
+
+
+#%%
+def valid_cardinality(dataset):
+    if dataset.cardinality() == tf.data.INFINITE_CARDINALITY:
+        return False
+    if dataset.cardinality() == tf.data.UNKNOWN_CARDINALITY:
+        return False
+    return True
+
+
+def _to_dataset(x, y=None, n=None):
+    if not isinstance(x, tf.data.Dataset):
+        n = len(x)
+        if y is not None:
+            x = tf.data.Dataset.from_tensor_slices((x, y))
+        else:
+            x = tf.data.Dataset.from_tensor_slices(x)
+    else:
+        if valid_cardinality(x):
+            n = x.cardinality()
+        elif not valid_cardinality(x) and n is None:
+            raise ValueError("Unable to infer length of dataset {}.".format(x))
+
+    return x, n
+
+
+def batch_predict(model, q, c, bq, bc=None, yq=None, yc=None, nq=None, nc=None):
+    model = PredictDataModel.from_model(model)
+
+    if (yq is None and yc is not None) or (yc is None and yq is not None):
+        raise ValueError("Must have both `yq` and `yc` or have both be None.")
+
+    qd, nq = _to_dataset(q, yq, nq)
+    cd, nc = _to_dataset(c, yc, nc)
+    with_labels = not isinstance(qd.element_spec, tf.TensorSpec)
+
+    if bc is None:
+        bc = bq
+    qd = qd.batch(bq)
+    cd = cd.batch(bc)
+
+    nqb = math.ceil(nq / bq)
+    ncb = math.ceil(nc / bc)
+
+    if with_labels:
+        repeat_batch = lambda x, y: tf.data.Dataset.from_tensors((x, y)).repeat(ncb)
+    else:
+        repeat_batch = lambda x: tf.data.Dataset.from_tensors(x).repeat(ncb)
+
+    qd = qd.flat_map(repeat_batch)
+    cd = cd.repeat(nqb)
+
+    if with_labels:
+        td = tf.data.Dataset.zip((qd, cd))
+        td = td.map(lambda q, c: ((q[0], c[0]), (q[1], c[1])))
+        z, (yqz, ycz) = model.predict(td)
+    else:
+        td = tf.data.Dataset.zip(((qd, cd),))
+        z = model.predict(td)
+
+    # predict
+    z = tf.reshape(z, [nqb, ncb, bq, bc])
+    z = tf.transpose(z, [0, 2, 1, 3])  # [nqb, bq, ncb, bc]
+    z = tf.reshape(z, [nq, nc])
+
+    if with_labels:
+        yq = tf.reshape(yqz, [nqb, ncb, bq])[:, 0]
+        yq = tf.reshape(yq, [-1, 1])
+        yc = ycz[:nc]
+
+        yz = tf.cast(tf.equal(yq, tf.transpose(yc)), tf.int32)
+
+        return z, yz
+
+    return z
+
+
+def batch_predict2(model, q, c, bq, bc, yq=None, yc=None, nq=None, nc=None):
+    model = PredictDataModel.from_model(model)
+
+    if (yq is None and yc is not None) or (yc is None and yq is not None):
+        raise ValueError("Must have both `yq` and `yc` or have both be None.")
+
+    qd, nq = _to_dataset(q, yq, nq)
+    cd, nc = _to_dataset(c, yc, nc)
+    with_labels = not isinstance(qd.element_spec, tf.TensorSpec)
+
+    if bc is None:
+        bc = bq
+    qd = qd.batch(bq)
+    cd = cd.batch(bc)
+
+    nqb = math.ceil(nq / bq)
+    ncb = math.ceil(nc / bc)
+
+    z = []
+    yq = []
+    for batch in qd:
+        if with_labels:
+            qi, yqi = batch
+            yq.append(yqi)
+        else:
+            qi = batch
+
+        qi = tf.data.Dataset.from_tensors(qi).repeat(ncb)
+
+        if with_labels:
+            qi_c = tf.data.Dataset.zip((qi, cd)).map(lambda q, c: ((q, c[0]), c[1]))
+            zi, yc = model.predict(qi_c)
+        else:
+            qi_c = tf.data.Dataset.zip(((qi, cd),))
+            zi = model.predict(qi_c)
+
+        zi = tf.concat(tf.split(zi, nqb), axis=-1)  # TODO: Error when bq=2, bc=5, nq=10, nc=10
+        z.append(zi)
+    z = tf.concat(z, axis=0)
+
+    if with_labels:
+        yq = tf.concat(yq, axis=0)
+        yq = tf.expand_dims(yq, 1)
+        yz = tf.cast(tf.equal(yq, tf.transpose(yc)), tf.int32)
+        return z, yz
+
+    return z

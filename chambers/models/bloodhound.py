@@ -10,6 +10,7 @@ from chambers.layers.transformer import Decoder, DecoderLayer
 from chambers.models import backbones
 from chambers.models.backbones.vision_transformer import _obtain_inputs
 from chambers.models.base import PredictDataModel
+from chambers.utils.generic import ProgressBar
 
 
 def _pool(x, method=None, prefix=""):
@@ -462,7 +463,7 @@ def _to_dataset(x, y=None, n=None):
     return x, n
 
 
-def batch_predict(model, q, c, bq, bc=None, yq=None, yc=None, nq=None, nc=None):
+def batch_predict(model, q, c, bq, bc=None, yq=None, yc=None, nq=None, nc=None, verbose=True):
     model = PredictDataModel.from_model(model)
 
     if (yq is None and yc is not None) or (yc is None and yq is not None):
@@ -491,9 +492,16 @@ def batch_predict(model, q, c, bq, bc=None, yq=None, yc=None, nq=None, nc=None):
     if with_labels:
         td = tf.data.Dataset.zip((qd, cd))
         td = td.map(lambda q, c: ((q[0], c[0]), (q[1], c[1])))
-        z, (yqz, ycz) = model.predict(td)
     else:
         td = tf.data.Dataset.zip(((qd, cd),))
+
+    if verbose:
+        prog = ProgressBar(total=nqb * ncb)
+        td = td.apply(prog.dataset_apply_fn)
+
+    if with_labels:
+        z, (yqz, ycz) = model.predict(td)
+    else:
         z = model.predict(td)
 
     # predict

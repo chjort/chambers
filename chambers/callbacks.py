@@ -73,12 +73,22 @@ from chambers.utils.tensor import arg_to_gather_nd
 
 class PairedRankingMetricCallback(tf.keras.callbacks.Callback):
     def __init__(
-        self, dataset: tf.data.Dataset, n, metric_funcs, name="ranking_metrics"
+        self,
+        dataset: tf.data.Dataset,
+        len_dataset,
+        metric_funcs,
+        batch_size=10,
+        remove_top1=False,
+        verbose=True,
+        name="ranking_metrics",
     ):
         super().__init__()
         self.dataset = dataset
-        self.n = n
+        self.len_dataset = len_dataset
         self.metric_funcs = metric_funcs
+        self.batch_size = batch_size
+        self.remove_top1 = remove_top1
+        self.verbose = verbose
         self.name = name
         self._supports_tf_logs = True
 
@@ -87,15 +97,16 @@ class PairedRankingMetricCallback(tf.keras.callbacks.Callback):
             model=self.model,
             q=self.dataset,
             c=self.dataset,
-            bq=10,
-            bc=10,
+            bq=self.batch_size,
+            bc=self.batch_size,
             yq=None,
             yc=None,
-            nq=self.n,
-            nc=self.n,
+            nq=self.len_dataset,
+            nc=self.len_dataset,
+            verbose=self.verbose,
         )
 
-        binary_ranking, index_ranking = rank_labels(y, z, remove_top1=True)
+        binary_ranking, index_ranking = rank_labels(y, z, remove_top1=self.remove_top1)
 
         for i, metric_fn in enumerate(self.metric_funcs):
             metric_name = "{}".format(metric_fn.__name__)

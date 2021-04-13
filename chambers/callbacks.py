@@ -30,23 +30,25 @@ class PairedRankingMetricCallback(tf.keras.callbacks.Callback):
         self.name = name
         self._supports_tf_logs = True
 
+        self.model = PredictReturnYModel.from_model(model)
+        if self.encoder is not None:
+            self.encoder = PredictReturnYModel.from_model(encoder)
+
     def set_model(self, model):
         if self.model is None:
-            self.model = model
+            self.model = PredictReturnYModel.from_model(model)
 
     def on_epoch_end(self, epoch, logs=None):
         if self.encoder is not None:
-            encoder = PredictReturnYModel.from_model(self.encoder)
-            qz, yq = encoder.predict(self.dataset)
+            qz, yq = self.encoder.predict(self.dataset)
             nq = len(qz)
         else:
             qz = self.dataset
             yq = None
             nq = self.dataset_len
 
-        model = PredictReturnYModel.from_model(self.model)
         z, y = batch_predict_pairs(
-            model=model,
+            model=self.model,
             q=qz,
             bq=self.batch_size,
             yq=yq,

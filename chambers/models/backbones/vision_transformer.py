@@ -113,7 +113,9 @@ def _get_model_info(weights, model_name):
     return default_size, has_feature
 
 
-def _obtain_inputs(input_tensor, input_shape, default_size, min_size, weights, model_name, name=None):
+def _obtain_inputs(
+    input_tensor, input_shape, default_size, min_size, weights, model_name, name=None
+):
     if input_shape is not None and _are_weights_pretrained(weights, model_name):
         default_shape = (default_size, default_size, input_shape[-1])
         if tuple(input_shape) != default_shape:
@@ -392,6 +394,7 @@ def DistilledVisionTransformer(
     else:
         x = tf.keras.layers.Average()([x_cls, x_dist])
 
+    x = tf.keras.layers.Activation("linear", dtype=tf.float32, name="cast_float32")(x)
     model = tf.keras.models.Model(inputs=inputs, outputs=x, name=model_name)
 
     _load_weights(model, weights, include_top)

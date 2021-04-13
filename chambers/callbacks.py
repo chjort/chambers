@@ -1,28 +1,31 @@
 import tensorflow as tf
 
-from chambers.models.bloodhound import batch_predict
+from chambers.models.base import PredictReturnYModel
+from chambers.models.bloodhound import batch_predict_pairs
 from chambers.utils.ranking import rank_labels
 
 
 class PairedRankingMetricCallback(tf.keras.callbacks.Callback):
     def __init__(
         self,
+        model,
         dataset: tf.data.Dataset,
-        len_dataset,
         metric_funcs,
+        encoder=None,
         batch_size=10,
+        dataset_len=None,
         remove_top1=False,
-        model=None,
         verbose=True,
         name="ranking_metrics",
     ):
         super().__init__()
+        self.model = model
+        self.encoder = encoder
         self.dataset = dataset
-        self.len_dataset = len_dataset
         self.metric_funcs = metric_funcs
         self.batch_size = batch_size
+        self.dataset_len = dataset_len
         self.remove_top1 = remove_top1
-        self.model = model
         self.verbose = verbose
         self.name = name
         self._supports_tf_logs = True
@@ -32,18 +35,26 @@ class PairedRankingMetricCallback(tf.keras.callbacks.Callback):
             self.model = model
 
     def on_epoch_end(self, epoch, logs=None):
-        z, y = batch_predict(
-            model=self.model,
-            q=self.dataset,
-            c=self.dataset,
+        if self.encoder is not None:
+            encoder = PredictReturnYModel.from_model(self.encoder)
+            qz, yq = encoder.predict(self.dataset)
+            nq = len(qz)
+        else:
+            qz = self.dataset
+            yq = None
+            nq = self.dataset_len
+
+        model = PredictReturnYModel.from_model(self.model)
+        z, y = batch_predict_pairs(
+            model=model,
+            q=qz,
             bq=self.batch_size,
-            bc=self.batch_size,
-            yq=None,
-            yc=None,
-            nq=self.len_dataset,
-            nc=self.len_dataset,
+            yq=yq,
+            nq=nq,
             verbose=self.verbose,
         )
+        yqz, ycz = y
+        y = tf.cast(tf.equal(yqz, tf.transpose(ycz)), tf.int32)
 
         binary_ranking, index_ranking = rank_labels(y, z, remove_top1=self.remove_top1)
 

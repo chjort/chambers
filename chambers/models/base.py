@@ -8,7 +8,7 @@ class BaseModel(tf.keras.Model):
         return cls(inputs=model.inputs, outputs=model.outputs, name=model.name)
 
 
-class PredictDataModel(BaseModel):
+class PredictReturnYModel(BaseModel):
     def predict_step(self, data):
         """The logic for one inference step.
 

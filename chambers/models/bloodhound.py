@@ -9,7 +9,6 @@ from chambers.layers.reduce import Sum
 from chambers.layers.transformer import Decoder, DecoderLayer
 from chambers.models import backbones
 from chambers.models.backbones.vision_transformer import _obtain_inputs
-from chambers.models.base import PredictDataModel
 from chambers.utils.generic import ProgressBar
 
 
@@ -293,23 +292,11 @@ def _to_dataset(x, y=None, n=None):
     return x, n
 
 
-def batch_predict(
-    model, q, bq, yq=None, nq=None, c=None, bc=None, yc=None, nc=None, verbose=True
-):
-    model = PredictDataModel.from_model(model)
-
-    if c is None:
-        c = q
-        bc = bq
-        yc = yq
-        nc = nq
-
+def pair_iteration_dataset(q, c, bq, bc, yq=None, yc=None, nq=None, nc=None):
     qd, nq = _to_dataset(q, yq, nq)
     cd, nc = _to_dataset(c, yc, nc)
     with_labels = not isinstance(qd.element_spec, tf.TensorSpec)
 
-    if bc is None:
-        bc = bq
     qd = qd.batch(bq)
     cd = cd.batch(bc)
 
@@ -326,96 +313,64 @@ def batch_predict(
 
     if with_labels:
         td = tf.data.Dataset.zip((qd, cd))
-        if c is None:
-            td = td.map(lambda q, c: (q[0], q[1]))  # (x_q, y_q)
-        else:
-            td = td.map(lambda q, c: ((q[0], c[0]), (q[1], c[1])))  # ((x_q, x_c), (y_q, y_c))
+        # ((x_q, x_c), (y_q, y_c))
+        td = td.map(lambda q, c: ((q[0], c[0]), (q[1], c[1])))
     else:
         td = tf.data.Dataset.zip(((qd, cd),))
+
+    return td
+
+
+def reshape_pair_predictions(x, bq, bc, nq, nc, y=None):
+    nqb = math.ceil(nq / bq)
+    ncb = math.ceil(nc / bc)
+
+    x = tf.reshape(x, [nqb, ncb, bq, bc])
+    x = tf.transpose(x, [0, 2, 1, 3])  # [nqb, bq, ncb, bc]
+    x = tf.reshape(x, [nq, nc])
+
+    if y is not None:
+        yq, yc = y
+        yq = tf.reshape(yq, [nqb, ncb, bq])[:, 0]
+        yq = tf.reshape(yq, [-1, 1])
+        yc = yc[:nc]
+        return x, (yq, yc)
+
+    return x
+
+
+def batch_predict_pairs(
+    model, q, bq, c=None, bc=None, yq=None, yc=None, nq=None, nc=None, verbose=True
+):
+    if c is None:
+        c = q
+        bc = bq
+        yc = yq
+        nc = nq
+    elif bc is None:
+        bc = bq
+
+    q, nq = _to_dataset(q, yq, nq)
+    c, nc = _to_dataset(c, yc, nc)
+
+    bq = min(bq, nq)
+    bc = min(bc, nc)
+
+    td = pair_iteration_dataset(q, c, bq, bc, yq, yc, nq, nc)
+
+    nqb = math.ceil(nq / bq)
+    ncb = math.ceil(nc / bc)
 
     if verbose:
         prog = ProgressBar(total=nqb * ncb)
         td = td.apply(prog.dataset_apply_fn)
 
-    if with_labels:
-        if c is None:
-            z, yqz = model.predict(td)
-            ycz = yqz
-        else:
-            z, (yqz, ycz) = model.predict(td)
-    else:
-        z = model.predict(td)
+    z = model.predict(td)
 
-    # predict
-    z = tf.reshape(z, [nqb, ncb, bq, bc])
-    z = tf.transpose(z, [0, 2, 1, 3])  # [nqb, bq, ncb, bc]
-    z = tf.reshape(z, [nq, nc])
+    if isinstance(z, tuple):
+        z, y = z
+        z, y = reshape_pair_predictions(z, bq, bc, nq, nc, y=y)
+        return z, y
 
-    if with_labels:
-        yq = tf.reshape(yqz, [nqb, ncb, bq])[:, 0]
-        yq = tf.reshape(yq, [-1, 1])
-        yc = ycz[:nc]
-
-        yz = tf.cast(tf.equal(yq, tf.transpose(yc)), tf.int32)
-
-        return z, yz
-
+    z = reshape_pair_predictions(z, bq, bc, nq, nc)
     return z
-
-
-# def batch_predict(model, q, c, bq, bc=None, yq=None, yc=None, nq=None, nc=None, verbose=True):
-#     model = PredictDataModel.from_model(model)
-#
-#     if (yq is None and yc is not None) or (yc is None and yq is not None):
-#         raise ValueError("Must have both `yq` and `yc` or have both be None.")
-#
-#     qd, nq = _to_dataset(q, yq, nq)
-#     cd, nc = _to_dataset(c, yc, nc)
-#     with_labels = not isinstance(qd.element_spec, tf.TensorSpec)
-#
-#     if bc is None:
-#         bc = bq
-#     qd = qd.batch(bq)
-#     cd = cd.batch(bc)
-#
-#     nqb = math.ceil(nq / bq)
-#     ncb = math.ceil(nc / bc)
-#
-#     if with_labels:
-#         repeat_batch = lambda x, y: tf.data.Dataset.from_tensors((x, y)).repeat(ncb)
-#     else:
-#         repeat_batch = lambda x: tf.data.Dataset.from_tensors(x).repeat(ncb)
-#
-#     qd = qd.flat_map(repeat_batch)
-#     cd = cd.repeat(nqb)
-#
-#     if with_labels:
-#         td = tf.data.Dataset.zip((qd, cd))
-#         td = td.map(lambda q, c: ((q[0], c[0]), (q[1], c[1])))
-#     else:
-#         td = tf.data.Dataset.zip(((qd, cd),))
-#
-#     if verbose:
-#         prog = ProgressBar(total=nqb * ncb)
-#         td = td.apply(prog.dataset_apply_fn)
-#
-#     if with_labels:
-#         z, (yqz, ycz) = model.predict(td)
-#     else:
-#         z = model.predict(td)
-#
-#     # predict
-#     z = tf.reshape(z, [nqb, ncb, bq, bc])
-#     z = tf.transpose(z, [0, 2, 1, 3])  # [nqb, bq, ncb, bc]
-#     z = tf.reshape(z, [nq, nc])
-#
-#     if with_labels:
-#         yq = tf.reshape(yqz, [nqb, ncb, bq])[:, 0]
-#         yq = tf.reshape(yq, [-1, 1])
-#         yc = ycz[:nc]
-#
-#         yz = tf.cast(tf.equal(yq, tf.transpose(yc)), tf.int32)
-#
-#         return z, yz
-#
-#     return z

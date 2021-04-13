@@ -298,6 +298,11 @@ def pair_iteration_dataset(q, c, bq, bc, yq=None, yc=None, nq=None, nc=None):
     cd, nc = _to_dataset(c, yc, nc)
     with_labels = not isinstance(qd.element_spec, tf.TensorSpec)
 
+    bq = tf.cast(bq, tf.int64)
+    bc = tf.cast(bc, tf.int64)
+    nq = tf.cast(nq, tf.int64) if nq is not None else nq
+    nc = tf.cast(nc, tf.int64) if nc is not None else nc
+
     qd = qd.batch(bq)
     cd = cd.batch(bc)
 
@@ -354,8 +359,13 @@ def batch_predict_pairs(
     q, nq = _to_dataset(q, yq, nq)
     c, nc = _to_dataset(c, yc, nc)
 
-    bq = min(bq, nq)
-    bc = min(bc, nc)
+    bq = tf.cast(bq, tf.int64)
+    bc = tf.cast(bc, tf.int64)
+    nq = tf.cast(nq, tf.int64) if nq is not None else nq
+    nc = tf.cast(nc, tf.int64) if nc is not None else nc
+
+    bq = tf.minimum(bq, nq)
+    bc = tf.minimum(bc, nc)
 
     td = pair_iteration_dataset(q, c, bq, bc, yq, yc, nq, nc)
 

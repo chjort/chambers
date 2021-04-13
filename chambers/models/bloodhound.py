@@ -35,9 +35,9 @@ def _pool(x, method=None, prefix=""):
 
 
 class _Pool3DAxis1(tf.keras.layers.Layer):
-    def __init__(self, method=None, keepdims=False, prefix=None):
-        name = method + "_pool" if method is not None else "identity"
-        name = prefix + name if prefix is not None else name
+    def __init__(self, method=None, keepdims=False, prefix=None, name=None):
+        # name = method + "_pool" if method is not None else "identity"
+        # name = prefix + name if prefix is not None else name
 
         super(_Pool3DAxis1, self).__init__(name=name)
         self.method = method
@@ -225,8 +225,8 @@ def Bloodhound4D(
         causal=False,
     )([c_enc, q_enc])
 
-    x_q = _Pool4DAxis2(method=pooling, prefix="q_")(q_enc)
-    x_c = _Pool4DAxis2(method=pooling, prefix="c_")(x_c)
+    x_q = _Pool4DAxis2(method=pooling, name="pool_q")(q_enc)
+    x_c = _Pool4DAxis2(method=pooling, name="pool_c")(x_c)
 
     if include_top:
         if pooling is None:
@@ -247,6 +247,7 @@ def Bloodhound4D(
     if candidates_tensor is not None:
         inputs_c = layer_utils.get_source_inputs(candidates_tensor)
 
+    x = tf.keras.layers.Activation("linear", dtype=tf.float32, name="cast_float32")(x)
     model = tf.keras.Model(inputs=[inputs_q, inputs_c], outputs=x, name=model_name)
     return model
 
@@ -259,8 +260,8 @@ def split_encoder_decoder(model):
     xq = model.get_layer("q_expand")(dec_inputs1)
     xc = model.get_layer("c_expand")(dec_inputs2)
     x = model.get_layer("decoder4d")([xc, xq])
-    xq = model.get_layer(index=-3)(xq)
-    xc = model.get_layer(index=-2)(x)
+    xq = model.get_layer("pool_q")(xq)
+    xc = model.get_layer("pool_c")(x)
     x = model.get_layer("cosine_similarity")([xq, xc])
     dec = tf.keras.Model(inputs=[dec_inputs1, dec_inputs2], outputs=x)
 
@@ -278,7 +279,7 @@ def valid_cardinality(dataset):
 
 def _to_dataset(x, y=None, n=None):
     if not isinstance(x, tf.data.Dataset):
-        n = len(x)
+        n = tf.shape(x)[0]
         if y is not None:
             x = tf.data.Dataset.from_tensor_slices((x, y))
         else:
@@ -300,8 +301,8 @@ def pair_iteration_dataset(q, c, bq, bc, yq=None, yc=None, nq=None, nc=None):
     qd = qd.batch(bq)
     cd = cd.batch(bc)
 
-    nqb = math.ceil(nq / bq)
-    ncb = math.ceil(nc / bc)
+    nqb = tf.cast(tf.math.ceil(nq / bq), tf.int64)
+    ncb = tf.cast(tf.math.ceil(nc / bc), tf.int64)
 
     if with_labels:
         repeat_batch = lambda x, y: tf.data.Dataset.from_tensors((x, y)).repeat(ncb)
@@ -322,8 +323,8 @@ def pair_iteration_dataset(q, c, bq, bc, yq=None, yc=None, nq=None, nc=None):
 
 
 def reshape_pair_predictions(x, bq, bc, nq, nc, y=None):
-    nqb = math.ceil(nq / bq)
-    ncb = math.ceil(nc / bc)
+    nqb = tf.cast(tf.math.ceil(nq / bq), tf.int64)
+    ncb = tf.cast(tf.math.ceil(nc / bc), tf.int64)
 
     x = tf.reshape(x, [nqb, ncb, bq, bc])
     x = tf.transpose(x, [0, 2, 1, 3])  # [nqb, bq, ncb, bc]
@@ -358,10 +359,10 @@ def batch_predict_pairs(
 
     td = pair_iteration_dataset(q, c, bq, bc, yq, yc, nq, nc)
 
-    nqb = math.ceil(nq / bq)
-    ncb = math.ceil(nc / bc)
-
     if verbose:
+        nqb = tf.cast(tf.math.ceil(nq / bq), tf.int32)
+        ncb = tf.cast(tf.math.ceil(nc / bc), tf.int32)
+
         prog = ProgressBar(total=nqb * ncb)
         td = td.apply(prog.dataset_apply_fn)
 

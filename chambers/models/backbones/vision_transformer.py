@@ -125,6 +125,7 @@ def _obtain_inputs(
                 )
             )
 
+    # TODO: write own `obtain_input_shape` function
     input_shape = imagenet_utils.obtain_input_shape(
         input_shape=input_shape,
         default_size=default_size,

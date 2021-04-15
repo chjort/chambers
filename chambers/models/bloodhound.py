@@ -7,23 +7,19 @@ from chambers.layers.transformer import Decoder, DecoderLayer
 from chambers.models import backbones
 from chambers.models.backbones.vision_transformer import _obtain_inputs
 from chambers.utils.generic import ProgressBar
-from chambers.utils.layer_utils import inputs_to_input_layer
 
 
 class _Pool3DAxis1(tf.keras.layers.Layer):
-    def __init__(self, method=None, keepdims=False, prefix=None, name=None):
-        # name = method + "_pool" if method is not None else "identity"
-        # name = prefix + name if prefix is not None else name
-
+    def __init__(self, method="avg", keepdims=False, name=None):
         super(_Pool3DAxis1, self).__init__(name=name)
+        if method not in {"avg", "max", "sum", "cls"}:
+            raise ValueError("`method` must be either 'avg', 'max', 'sum' or 'cls'.")
+
         self.method = method
         self.keepdims = keepdims
         self.axis = 1
 
     def call(self, inputs, **kwargs):
-        if self.method is None:
-            return inputs
-
         x = self._slice(inputs)
 
         if self.method == "avg":
@@ -42,6 +38,14 @@ class _Pool3DAxis1(tf.keras.layers.Layer):
             x = x[:, 1:, :]
         return x
 
+    def get_config(self):
+        config = {
+            "method": self.method,
+            "keepdims": self.keepdims,
+        }
+        base_config = super(_Pool3DAxis1, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
+
 
 class _Pool4DAxis2(_Pool3DAxis1):
     def __init__(self, *args, **kwargs):
@@ -54,6 +58,22 @@ class _Pool4DAxis2(_Pool3DAxis1):
         else:
             x = x[:, :, 1:, :]
         return x
+
+
+class ExpandDims(tf.keras.layers.Layer):
+    def __init__(self, axis=0, **kwargs):
+        super(ExpandDims, self).__init__(**kwargs)
+        self.axis = axis
+
+    def call(self, inputs, **kwargs):
+        return tf.expand_dims(inputs, self.axis)
+
+    def get_config(self):
+        config = {
+            "axis": self.axis,
+        }
+        base_config = super(ExpandDims, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
 
 
 class MultiHeadAttention4D(MultiHeadAttention):
@@ -131,81 +151,6 @@ class Decoder4D(Decoder):
         ]
 
 
-class BloodhoundSub(tf.keras.Model):
-    def __init__(
-        self,
-        n_layers,
-        n_heads,
-        ff_dim,
-        dropout_rate=0.1,
-        include_top=True,
-        pooling=None,
-        feature_dim=None,
-        name=None,
-        **kwargs,
-    ):
-        super(BloodhoundSub, self).__init__(name=name, **kwargs)
-        self.n_layers = n_layers
-        self.n_heads = n_heads
-        self.ff_dim = ff_dim
-        self.dropout_rate = dropout_rate
-        self.include_top = include_top
-        self.pooling = pooling
-        self.feature_dim = feature_dim
-
-        self.pool_q = _Pool4DAxis2(method=pooling, name="pool_q")
-        self.pool_c = _Pool4DAxis2(method=pooling, name="pool_c")
-
-        if include_top:
-            if pooling is None:
-                raise ValueError(
-                    "`include_top=True` requires `pooling` to be either 'avg', 'max', 'sum', or 'cls'."
-                )
-
-            if feature_dim is not None:
-                self.feature_q = tf.keras.layers.Dense(feature_dim)
-                self.feature_c = tf.keras.layers.Dense(feature_dim)
-
-            self.sim = CosineSimilarity(axis=-1)
-
-    def build(self, input_shape):
-        embed_dim = input_shape[0][-1]
-        self.decoder = Decoder4D(
-            embed_dim=embed_dim,
-            num_heads=self.n_heads,
-            ff_dim=self.ff_dim,
-            num_layers=self.n_layers,
-            attention_dropout_rate=self.dropout_rate,
-            dense_dropout_rate=self.dropout_rate,
-            norm_output=True,
-            pre_norm=False,
-            causal=False,
-            name="decoder",
-        )
-
-    def call(self, inputs, training=None, mask=None):
-        c, q = inputs
-
-        q = tf.expand_dims(q, 1)
-        c = tf.expand_dims(c, 0)
-
-        c = self.decoder([c, q], training=training)
-
-        q = self.pool_q(q)
-        c = self.pool_c(c)
-
-        if self.include_top:
-            if self.feature_dim is not None:
-                q = self.feature_q(q)
-                c = self.feature_c(c)
-
-            x = self.sim([q, c])
-        else:
-            x = [q, c]
-
-        return x
-
-
 def BloodhoundFunctional(
     query_shape,
     candidates_shape,
@@ -215,7 +160,6 @@ def BloodhoundFunctional(
     dropout_rate=0.1,
     include_top=True,
     pooling=None,
-    feature_dim=None,
     name=None,
 ):
     """
@@ -229,14 +173,10 @@ def BloodhoundFunctional(
     inputs_c = tf.keras.layers.Input(shape=candidates_shape)
 
     # NOTE: positional embedding here if encoder is not a transformer
-    q_enc = tf.keras.layers.Lambda(lambda x: tf.expand_dims(x, 1), name="q_expand")(
-        inputs_q
-    )
-    c_enc = tf.keras.layers.Lambda(lambda x: tf.expand_dims(x, 0), name="c_expand")(
-        inputs_c
-    )
-    x_c = Decoder4D(
-        embed_dim=c_enc.shape[-1],
+    q = ExpandDims(axis=1, name="q_expand")(inputs_q)
+    c = ExpandDims(axis=0, name="c_expand")(inputs_c)
+    c = Decoder4D(
+        embed_dim=c.shape[-1],
         num_heads=n_heads,
         ff_dim=ff_dim,
         num_layers=n_layers,
@@ -246,10 +186,11 @@ def BloodhoundFunctional(
         pre_norm=False,
         causal=False,
         name="decoder",
-    )([c_enc, q_enc])
+    )([c, q])
 
-    x_q = _Pool4DAxis2(method=pooling, name="pool_q")(q_enc)
-    x_c = _Pool4DAxis2(method=pooling, name="pool_c")(x_c)
+    if pooling is not None:
+        q = _Pool4DAxis2(method=pooling, name="pool_q")(q)
+        c = _Pool4DAxis2(method=pooling, name="pool_c")(c)
 
     if include_top:
         if pooling is None:
@@ -257,62 +198,13 @@ def BloodhoundFunctional(
                 "`include_top=True` requires `pooling` to be either 'avg', 'max', 'sum', or 'cls'."
             )
 
-        if feature_dim is not None:
-            x_q = tf.keras.layers.Dense(feature_dim)(x_q)
-            x_c = tf.keras.layers.Dense(feature_dim)(x_c)
-
-        x = CosineSimilarity(axis=-1)([x_q, x_c])
+        x = CosineSimilarity(axis=-1)([q, c])
+        # x = tf.keras.layers.Dense(1, activation="sigmoid", dtype=tf.float32)(c)
     else:
-        x = [x_q, x_c]
+        x = [q, c]
 
     model = tf.keras.Model(inputs=[inputs_q, inputs_c], outputs=x, name=name)
     return model
-
-
-def BloodhoundHead(
-    q,
-    c,
-    n_layers,
-    n_heads,
-    ff_dim,
-    dropout_rate=0.1,
-    include_top=True,
-    pooling=None,
-    feature_dim=None,
-):
-    q_enc = tf.keras.layers.Lambda(lambda x: tf.expand_dims(x, 1), name="q_expand")(q)
-    c_enc = tf.keras.layers.Lambda(lambda x: tf.expand_dims(x, 0), name="c_expand")(c)
-    x_c = Decoder4D(
-        embed_dim=c_enc.shape[-1],
-        num_heads=n_heads,
-        ff_dim=ff_dim,
-        num_layers=n_layers,
-        attention_dropout_rate=dropout_rate,
-        dense_dropout_rate=dropout_rate,
-        norm_output=True,
-        pre_norm=False,
-        causal=False,
-        name="decoder",
-    )([c_enc, q_enc])
-
-    x_q = _Pool4DAxis2(method=pooling, name="pool_q")(q_enc)
-    x_c = _Pool4DAxis2(method=pooling, name="pool_c")(x_c)
-
-    if include_top:
-        if pooling is None:
-            raise ValueError(
-                "`include_top=True` requires `pooling` to be either 'avg', 'max', 'sum', or 'cls'."
-            )
-
-        if feature_dim is not None:
-            x_q = tf.keras.layers.Dense(feature_dim)(x_q)
-            x_c = tf.keras.layers.Dense(feature_dim)(x_c)
-
-        x = CosineSimilarity(axis=-1)([x_q, x_c])
-    else:
-        x = [x_q, x_c]
-
-    return x
 
 
 def Bloodhound4D(
@@ -327,7 +219,6 @@ def Bloodhound4D(
     include_top=True,
     weights="imagenet21k+_224",
     pooling=None,
-    feature_dim=None,
     model_name=None,
 ):
     """
@@ -366,43 +257,18 @@ def Bloodhound4D(
     q_enc = enc(inputs_q)
     c_enc = enc(inputs_c)
     # NOTE: positional embedding here if encoder is not a transformer
-    # dec = BloodhoundFunctional(
-    #     query_shape=q_enc.shape[1:],
-    #     candidates_shape=c_enc.shape[1:],
-    #     n_layers=n_layers,
-    #     n_heads=n_heads,
-    #     ff_dim=ff_dim,
-    #     dropout_rate=dropout_rate,
-    #     include_top=include_top,
-    #     pooling=pooling,
-    #     feature_dim=feature_dim,
-    #     name="decoder",
-    # )
-    # x = dec([c_enc, q_enc])
-
-    # dec = BloodhoundSub(
-    #     n_layers=n_layers,
-    #     n_heads=n_heads,
-    #     ff_dim=ff_dim,
-    #     dropout_rate=dropout_rate,
-    #     include_top=include_top,
-    #     pooling=pooling,
-    #     feature_dim=feature_dim,
-    #     name="decoder",
-    # )
-    # x = dec([c_enc, q_enc])
-
-    x = BloodhoundHead(
-        q=q_enc,
-        c=c_enc,
+    dec = BloodhoundFunctional(
+        query_shape=q_enc.shape[1:],
+        candidates_shape=c_enc.shape[1:],
         n_layers=n_layers,
         n_heads=n_heads,
         ff_dim=ff_dim,
         dropout_rate=dropout_rate,
         include_top=include_top,
         pooling=pooling,
-        feature_dim=feature_dim,
+        name="decoder",
     )
+    x = dec([q_enc, c_enc])
 
     x = tf.keras.layers.Activation("linear", dtype=tf.float32, name="cast_float32")(x)
 
@@ -413,31 +279,6 @@ def Bloodhound4D(
 
     model = tf.keras.Model(inputs=[inputs_q, inputs_c], outputs=x, name=model_name)
     return model
-
-
-def split_encoder_decoder(model):
-    enc = model.get_layer("encoder")
-
-    dec_inputs1 = tf.keras.layers.Input(shape=enc.output.shape[1:])
-    dec_inputs2 = tf.keras.layers.Input(shape=enc.output.shape[1:])
-
-    try:
-        xq = model.get_layer("q_pos_encoding")(dec_inputs1)
-        xc = model.get_layer("c_pos_encoding")(dec_inputs2)
-    except ValueError:
-        xq = dec_inputs1
-        xc = dec_inputs2
-
-    xq = model.get_layer("q_expand")(xq)
-    xc = model.get_layer("c_expand")(xc)
-    x = model.get_layer("decoder")([xc, xq])
-    xq = model.get_layer("pool_q")(xq)
-    xc = model.get_layer("pool_c")(x)
-    x = model.get_layer("cosine_similarity")([xq, xc])
-    dec = tf.keras.Model(inputs=[dec_inputs1, dec_inputs2], outputs=x)
-
-    return enc, dec
-
 
 #%%
 def valid_cardinality(dataset):

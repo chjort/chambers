@@ -1,7 +1,7 @@
 import faiss
 import tensorflow as tf
 
-from chambers.models.base import PredictReturnYModel
+from chambers.models.base import PredictReturnYModel, set_predict_return_y
 from chambers.models.bloodhound import batch_predict_pairs
 from chambers.utils.ranking import rank_labels
 
@@ -97,13 +97,13 @@ class PairedRankingMetricCallback(tf.keras.callbacks.Callback):
         self.name = name
         self._supports_tf_logs = True
 
-        self.model = PredictReturnYModel.from_model(model)
+        self.model = set_predict_return_y(model)
         if self.encoder is not None:
-            self.encoder = PredictReturnYModel.from_model(encoder)
+            self.encoder = set_predict_return_y(encoder)
 
     def set_model(self, model):
         if self.model is None:
-            self.model = PredictReturnYModel.from_model(model)
+            self.model = set_predict_return_y(model)
 
     def on_epoch_end(self, epoch, logs=None):
         if self.encoder is not None:

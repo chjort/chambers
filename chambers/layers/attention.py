@@ -90,8 +90,9 @@ class MultiHeadAttention(tf.keras.layers.Layer):
         dense_kernel_initializer="glorot_uniform",
         dropout_rate=0.1,
         causal=False,
+        **kwargs
     ):
-        super(MultiHeadAttention, self).__init__()
+        super(MultiHeadAttention, self).__init__(**kwargs)
         self.head_dim = head_dim
         self.num_heads = num_heads
         self.dense_kernel_initializer = dense_kernel_initializer

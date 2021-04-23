@@ -89,7 +89,7 @@ class PositionalEmbedding2D(tf.keras.layers.Layer):
         scale=None,
         eps=1e-6,
         add_to_input=True,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(**kwargs)
         self.embedding_dim = embedding_dim
@@ -176,11 +176,12 @@ class LearnedEmbedding1D(tf.keras.layers.Layer):
         dtype=None,
         add_to_input=True,
         name="learned_embedding",
+        **kwargs,
     ):
         self.initializer = initializer
         self.add_to_input = add_to_input
         self.supports_masking = True
-        super(LearnedEmbedding1D, self).__init__(dtype=dtype, name=name)
+        super(LearnedEmbedding1D, self).__init__(dtype=dtype, name=name, **kwargs)
 
     def build(self, input_shape):
         self.embedding = self.add_weight(
@@ -212,7 +213,9 @@ class LearnedEmbedding1D(tf.keras.layers.Layer):
     @classmethod
     def from_config(cls, config):
         if isinstance(config["initializer"], tf.keras.initializers.Initializer):
-            config["initializer"] = tf.keras.initializers.deserialize(config["initializer"])
+            config["initializer"] = tf.keras.initializers.deserialize(
+                config["initializer"]
+            )
 
         return cls(**config)
 
@@ -238,6 +241,7 @@ class ConcatEmbedding(tf.keras.layers.Layer):
         initializer=None,
         dtype=None,
         name="concat_embedding",
+        **kwargs,
     ):
         assert (
             side == "left" or side == "right"
@@ -249,7 +253,7 @@ class ConcatEmbedding(tf.keras.layers.Layer):
         self.side = side
         self.initializer = initializer
         self.concat = tf.keras.layers.Concatenate(axis=axis)
-        super(ConcatEmbedding, self).__init__(dtype=dtype, name=name)
+        super(ConcatEmbedding, self).__init__(dtype=dtype, name=name, **kwargs)
 
     def build(self, input_shape):
         self.embedding = self.add_weight(
@@ -291,6 +295,8 @@ class ConcatEmbedding(tf.keras.layers.Layer):
     @classmethod
     def from_config(cls, config):
         if isinstance(config["initializer"], tf.keras.initializers.Initializer):
-            config["initializer"] = tf.keras.initializers.deserialize(config["initializer"])
+            config["initializer"] = tf.keras.initializers.deserialize(
+                config["initializer"]
+            )
 
         return cls(**config)

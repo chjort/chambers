@@ -16,8 +16,9 @@ class EncoderLayer(tf.keras.layers.Layer):
         dense_dropout_rate=0.1,
         norm_epsilon=1e-6,
         pre_norm=False,
+        **kwargs,
     ):
-        super(EncoderLayer, self).__init__()
+        super(EncoderLayer, self).__init__(**kwargs)
         self.embed_dim = embed_dim
         self.num_heads = num_heads
         self.ff_dim = ff_dim
@@ -121,8 +122,9 @@ class DecoderLayer(tf.keras.layers.Layer):
         norm_epsilon=1e-6,
         pre_norm=False,
         causal=True,
+        **kwargs,
     ):
-        super(DecoderLayer, self).__init__()
+        super(DecoderLayer, self).__init__(**kwargs)
         self.embed_dim = embed_dim  # TODO: get embed_dim from inputs_shape passed to build and remove this argument.
         self.num_heads = num_heads
         self.ff_dim = ff_dim
@@ -264,7 +266,7 @@ class Encoder(tf.keras.layers.Layer):
         norm_epsilon=1e-6,
         pre_norm=False,
         norm_output=False,
-        **kwargs
+        **kwargs,
     ):
         self.embed_dim = embed_dim
         self.num_heads = num_heads
@@ -362,7 +364,7 @@ class Decoder(tf.keras.layers.Layer):
         norm_output=False,
         causal=True,
         return_sequence=False,
-        **kwargs
+        **kwargs,
     ):
         self.embed_dim = embed_dim
         self.num_heads = num_heads

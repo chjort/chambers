@@ -209,6 +209,7 @@ class LearnedEmbedding1D(tf.keras.layers.Layer):
         base_config = super(LearnedEmbedding1D, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
+    @classmethod
     def from_config(cls, config):
         if isinstance(config["initializer"], tf.keras.initializers.Initializer):
             config["initializer"] = tf.keras.initializers.deserialize(config["initializer"])
@@ -287,6 +288,7 @@ class ConcatEmbedding(tf.keras.layers.Layer):
         base_config = super(ConcatEmbedding, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
+    @classmethod
     def from_config(cls, config):
         if isinstance(config["initializer"], tf.keras.initializers.Initializer):
             config["initializer"] = tf.keras.initializers.deserialize(config["initializer"])

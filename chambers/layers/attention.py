@@ -210,20 +210,29 @@ class MultiHeadAttention(tf.keras.layers.Layer):
         return None
 
     def get_config(self):
+        if isinstance(self.dense_kernel_initializer, tf.keras.initializers.Initializer):
+            dense_kernel_initializer = tf.keras.initializers.serialize(
+                self.dense_kernel_initializer
+            )
+        else:
+            dense_kernel_initializer = self.dense_kernel_initializer
+
         config = {
             "head_dim": self.head_dim,
             "num_heads": self.num_heads,
-            "dense_kernel_initializer": tf.keras.initializers.serialize(
-                self.dense_kernel_initializer
-            ),
+            "dense_kernel_initializer": dense_kernel_initializer,
             "dropout_rate": self.dropout_rate,
             "causal": self.causal,
         }
         base_config = super(MultiHeadAttention, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
+    @classmethod
     def from_config(cls, config):
-        config["dense_kernel_initializer"] = tf.keras.initializers.deserialize(
-            config["dense_kernel_initializer"]
-        )
+        if isinstance(
+            config["dense_kernel_initializer"], tf.keras.initializers.Initializer
+        ):
+            config["dense_kernel_initializer"] = tf.keras.initializers.deserialize(
+                config["dense_kernel_initializer"]
+            )
         return cls(**config)

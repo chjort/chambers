@@ -96,6 +96,7 @@ class EncoderLayer(tf.keras.layers.Layer):
         base_config = super(EncoderLayer, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
+    @classmethod
     def from_config(cls, config):
         if isinstance(
             config["dense_kernel_initializer"], tf.keras.initializers.Initializer
@@ -237,6 +238,7 @@ class DecoderLayer(tf.keras.layers.Layer):
         base_config = super(DecoderLayer, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
+    @classmethod
     def from_config(cls, config):
         if isinstance(
             config["dense_kernel_initializer"], tf.keras.initializers.Initializer
@@ -332,6 +334,7 @@ class Encoder(tf.keras.layers.Layer):
         base_config = super(Encoder, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
+    @classmethod
     def from_config(cls, config):
         if isinstance(
             config["dense_kernel_initializer"], tf.keras.initializers.Initializer
@@ -450,9 +453,10 @@ class Decoder(tf.keras.layers.Layer):
             "causal": self.causal,
             "return_sequence": self.return_sequence,
         }
-        base_config = super(EncoderLayer, self).get_config()
+        base_config = super(Decoder, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
+    @classmethod
     def from_config(cls, config):
         if isinstance(
             config["dense_kernel_initializer"], tf.keras.initializers.Initializer

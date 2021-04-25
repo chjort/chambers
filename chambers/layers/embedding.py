@@ -31,7 +31,7 @@ class PositionalEmbedding1D(tf.keras.layers.Layer):
         x = self.positional_encoding(sequence_len, self.embedding_dim)
 
         if self.add_to_input:
-            x = inputs + x
+            x = inputs + tf.cast(x, inputs.dtype)
 
         return x
 
@@ -122,7 +122,7 @@ class PositionalEmbedding2D(tf.keras.layers.Layer):
         x = self.compute_positional_mask(ones)
 
         if self.add_to_input:
-            x = inputs + x
+            x = inputs + tf.cast(x, inputs.dtype)
 
         return x
 

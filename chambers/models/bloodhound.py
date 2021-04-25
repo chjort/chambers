@@ -9,9 +9,10 @@ from chambers.models.backbones.vision_transformer import _obtain_inputs
 from chambers.utils.generic import ProgressBar
 
 
+@tf.keras.utils.register_keras_serializable(package="Chambers")
 class _Pool3DAxis1(tf.keras.layers.Layer):
-    def __init__(self, method="avg", keepdims=False, name=None):
-        super(_Pool3DAxis1, self).__init__(name=name)
+    def __init__(self, method="avg", keepdims=False, name=None, **kwargs):
+        super(_Pool3DAxis1, self).__init__(name=name, **kwargs)
         if method not in {"avg", "max", "sum", "cls"}:
             raise ValueError("`method` must be either 'avg', 'max', 'sum' or 'cls'.")
 
@@ -47,6 +48,7 @@ class _Pool3DAxis1(tf.keras.layers.Layer):
         return dict(list(base_config.items()) + list(config.items()))
 
 
+@tf.keras.utils.register_keras_serializable(package="Chambers")
 class _Pool4DAxis2(_Pool3DAxis1):
     def __init__(self, *args, **kwargs):
         super(_Pool4DAxis2, self).__init__(*args, **kwargs)
@@ -60,6 +62,7 @@ class _Pool4DAxis2(_Pool3DAxis1):
         return x
 
 
+@tf.keras.utils.register_keras_serializable(package="Chambers")
 class ExpandDims(tf.keras.layers.Layer):
     def __init__(self, axis=0, **kwargs):
         super(ExpandDims, self).__init__(**kwargs)
@@ -76,6 +79,7 @@ class ExpandDims(tf.keras.layers.Layer):
         return dict(list(base_config.items()) + list(config.items()))
 
 
+@tf.keras.utils.register_keras_serializable(package="Chambers")
 class MultiHeadAttention4D(MultiHeadAttention):
     def call(self, inputs, mask=None, training=None):
         """
@@ -110,6 +114,7 @@ class MultiHeadAttention4D(MultiHeadAttention):
         return x
 
 
+@tf.keras.utils.register_keras_serializable(package="Chambers")
 class DecoderLayer4D(DecoderLayer):
     def __init__(self, *args, **kwargs):
         super(DecoderLayer4D, self).__init__(*args, **kwargs)
@@ -133,6 +138,7 @@ class DecoderLayer4D(DecoderLayer):
         )
 
 
+@tf.keras.utils.register_keras_serializable(package="Chambers")
 class Decoder4D(Decoder):
     def build(self, input_shape):
         self.layers = [
@@ -200,6 +206,7 @@ def BloodhoundFunctional(
 
         x = CosineSimilarity(axis=-1)([q, c])
         # x = tf.keras.layers.Dense(1, activation="sigmoid", dtype=tf.float32)(c)
+        # x = tf.keras.layers.Lambda(lambda x: x[:, :, 0])(x)
     else:
         x = [q, c]
 

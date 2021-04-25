@@ -3,6 +3,7 @@ from tensorflow.python.keras.utils import layer_utils
 
 from chambers.layers.attention import MultiHeadAttention
 from chambers.layers.distance import CosineSimilarity
+from chambers.layers.embedding import PositionalEmbedding2D
 from chambers.layers.transformer import Decoder, DecoderLayer
 from chambers.models import backbones
 from chambers.models.backbones.vision_transformer import _obtain_inputs
@@ -234,19 +235,12 @@ def Bloodhound4D(
                       v
     c -> encoder -> decoder -> zc
     """
-    enc = backbones.ViTB16(
-        weights="imagenet21k+_224",
-        pooling=None,
-        include_top=False,
-    )
-    patch_size = enc.get_layer("patch_embeddings").get_layer("embedding").kernel_size
-    enc = tf.keras.Model(enc.inputs, enc.outputs, name="encoder")
 
     inputs_q = _obtain_inputs(
         query_tensor,
         query_shape,
         default_size=224,
-        min_size=patch_size,
+        min_size=16,
         weights=weights,
         model_name=model_name,
         name="query",
@@ -255,11 +249,18 @@ def Bloodhound4D(
         candidates_tensor,
         candidates_shape,
         default_size=224,
-        min_size=patch_size,
+        min_size=16,
         weights=weights,
         model_name=model_name,
         name="candidates",
     )
+
+    enc = backbones.ViTB16(
+        weights="imagenet21k+_224",
+        pooling=None,
+        include_top=False,
+    )
+    enc = tf.keras.Model(enc.inputs, enc.outputs, name="encoder")
 
     q_enc = enc(inputs_q)
     c_enc = enc(inputs_c)
@@ -276,6 +277,91 @@ def Bloodhound4D(
         name="decoder",
     )
     x = dec([q_enc, c_enc])
+
+    x = tf.keras.layers.Activation("linear", dtype=tf.float32, name="cast_float32")(x)
+
+    if query_tensor is not None:
+        inputs_q = layer_utils.get_source_inputs(query_tensor)
+    if candidates_tensor is not None:
+        inputs_c = layer_utils.get_source_inputs(candidates_tensor)
+
+    model = tf.keras.Model(inputs=[inputs_q, inputs_c], outputs=x, name=model_name)
+    return model
+
+
+def BloodhoundRes(
+    embed_dim,
+    n_layers,
+    n_heads,
+    ff_dim,
+    dropout_rate=0.1,
+    query_tensor=None,
+    query_shape=None,
+    candidates_tensor=None,
+    candidates_shape=None,
+    include_top=True,
+    weights="imagenet21k+_224",
+    pooling=None,
+    model_name=None,
+):
+    """
+        q -> encoder -> -----> zq
+                      |
+                      v
+    c -> encoder -> decoder -> zc
+    """
+    enc = tf.keras.applications.ResNet50(
+        weights="imagenet", include_top=False, input_shape=(224, 224, 3)
+    )
+    enc = tf.keras.Model(
+        inputs=enc.inputs,
+        outputs=enc.get_layer("conv4_block6_out").output,
+        name="encoder",
+    )
+
+    inputs_q = _obtain_inputs(
+        query_tensor,
+        query_shape,
+        default_size=224,
+        min_size=32,
+        weights=weights,
+        model_name=model_name,
+        name="query",
+    )
+    inputs_c = _obtain_inputs(
+        candidates_tensor,
+        candidates_shape,
+        default_size=224,
+        min_size=32,
+        weights=weights,
+        model_name=model_name,
+        name="candidates",
+    )
+
+    q = enc(inputs_q)
+    c = enc(inputs_c)
+
+    proj = tf.keras.layers.Conv2D(filters=embed_dim, kernel_size=1)
+    q = proj(q)
+    c = proj(c)
+    q = PositionalEmbedding2D(embedding_dim=embed_dim, add_to_input=True)(q)
+    c = PositionalEmbedding2D(embedding_dim=embed_dim, add_to_input=True)(c)
+    q = tf.keras.layers.Reshape([q.shape[1] * q.shape[2], q.shape[3]])(q)
+    c = tf.keras.layers.Reshape([c.shape[1] * c.shape[2], c.shape[3]])(c)
+
+    # NOTE: positional embedding here if encoder is not a transformer
+    dec = BloodhoundFunctional(
+        query_shape=q.shape[1:],
+        candidates_shape=c.shape[1:],
+        n_layers=n_layers,
+        n_heads=n_heads,
+        ff_dim=ff_dim,
+        dropout_rate=dropout_rate,
+        include_top=include_top,
+        pooling=pooling,
+        name="decoder",
+    )
+    x = dec([q, c])
 
     x = tf.keras.layers.Activation("linear", dtype=tf.float32, name="cast_float32")(x)
 

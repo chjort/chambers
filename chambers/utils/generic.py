@@ -171,3 +171,11 @@ class ProgressBar:
         n = tf.cast(n, tf.int32)
         self._steps.assign_add(n)
         self._report_progress()
+
+    def dataset_apply_fn(self, dataset):
+        def prog_fn(*args):
+            self.add(1)
+            return args
+
+        dataset = dataset.map(prog_fn)
+        return dataset

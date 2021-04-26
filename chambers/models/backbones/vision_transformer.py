@@ -5,6 +5,7 @@ from tensorflow.python.keras.utils import layer_utils
 
 from chambers.augmentations import ImageNetNormalization
 from chambers.layers.embedding import ConcatEmbedding, LearnedEmbedding1D
+from chambers.layers.reduce import Sum
 from chambers.layers.transformer import Encoder
 from chambers.utils.layer_utils import inputs_to_input_layer
 
@@ -113,7 +114,9 @@ def _get_model_info(weights, model_name):
     return default_size, has_feature
 
 
-def _obtain_inputs(input_tensor, input_shape, default_size, min_size, weights, model_name, name=None):
+def _obtain_inputs(
+    input_tensor, input_shape, default_size, min_size, weights, model_name, name=None
+):
     if input_shape is not None and _are_weights_pretrained(weights, model_name):
         default_shape = (default_size, default_size, input_shape[-1])
         if tuple(input_shape) != default_shape:
@@ -123,6 +126,7 @@ def _obtain_inputs(input_tensor, input_shape, default_size, min_size, weights, m
                 )
             )
 
+    # TODO: write own `obtain_input_shape` function
     input_shape = imagenet_utils.obtain_input_shape(
         input_shape=input_shape,
         default_size=default_size,
@@ -165,6 +169,28 @@ def _load_weights(model, weights, include_top):
         model.load_weights(weights)
 
 
+def _pool(x, method=None, prefix=""):
+    if method == "avg":
+        x = tf.keras.layers.Cropping1D((1, 0), name=prefix + "sequence_embeddings")(x)
+        x = tf.keras.layers.GlobalAveragePooling1D(name=prefix + "avg_pool")(x)
+    elif method == "max":
+        x = tf.keras.layers.Cropping1D((1, 0), name=prefix + "sequence_embeddings")(x)
+        x = tf.keras.layers.GlobalMaxPooling1D(name=prefix + "max_pool")(x)
+    elif method == "sum":
+        x = tf.keras.layers.Cropping1D((1, 0), name=prefix + "sequence_embeddings")(x)
+        x = Sum(axis=1, name=prefix + "sum_pool")(x)
+    elif method == "cls":
+        x = tf.keras.Sequential(
+            [
+                tf.keras.layers.Cropping1D((0, x.shape[1] - 1)),
+                tf.keras.layers.Reshape([-1]),
+            ],
+            name=prefix + "cls_embedding",
+        )(x)
+
+    return x
+
+
 def VisionTransformer(
     patch_size,
     patch_dim,
@@ -176,7 +202,7 @@ def VisionTransformer(
     input_shape=None,
     include_top=True,
     weights="imagenet21k+_224",
-    pooling=None,
+    pooling="cls",
     feature_dim=None,
     classes=1000,
     classifier_activation=None,
@@ -244,20 +270,7 @@ def VisionTransformer(
         norm_output=True,
     )(x)
 
-    if pooling == "avg":
-        x = tf.keras.layers.Cropping1D((1, 0), name="sequence_embeddings")(x)
-        x = tf.keras.layers.GlobalAveragePooling1D(name="avg_pool")(x)
-    elif pooling == "max":
-        x = tf.keras.layers.Cropping1D((1, 0), name="sequence_embeddings")(x)
-        x = tf.keras.layers.GlobalMaxPooling1D(name="max_pool")(x)
-    else:
-        x = tf.keras.Sequential(
-            [
-                tf.keras.layers.Cropping1D((0, x.shape[1] - 1)),
-                tf.keras.layers.Reshape([-1]),
-            ],
-            name="cls_embedding",
-        )(x)
+    x = _pool(x, method=pooling)
 
     if feature_dim is not None:
         x = tf.keras.layers.Dense(units=feature_dim, activation="tanh", name="feature")(
@@ -353,20 +366,7 @@ def DistilledVisionTransformer(
         norm_output=True,
     )(x)
 
-    if pooling == "avg":
-        x_cls = tf.keras.layers.Cropping1D((2, 0), name="sequence_embeddings")(x)
-        x_cls = tf.keras.layers.GlobalAveragePooling1D(name="avg_pool")(x_cls)
-    elif pooling == "max":
-        x_cls = tf.keras.layers.Cropping1D((2, 0), name="sequence_embeddings")(x)
-        x_cls = tf.keras.layers.GlobalMaxPooling1D(name="max_pool")(x_cls)
-    else:
-        x_cls = tf.keras.Sequential(
-            [
-                tf.keras.layers.Cropping1D((0, x.shape[1] - 1)),
-                tf.keras.layers.Reshape([-1]),
-            ],
-            name="cls_embedding",
-        )(x)
+    x_cls = _pool(x, method=pooling)
 
     x_dist = tf.keras.Sequential(
         [
@@ -392,6 +392,7 @@ def DistilledVisionTransformer(
     else:
         x = tf.keras.layers.Average()([x_cls, x_dist])
 
+    x = tf.keras.layers.Activation("linear", dtype=tf.float32, name="cast_float32")(x)
     model = tf.keras.models.Model(inputs=inputs, outputs=x, name=model_name)
 
     _load_weights(model, weights, include_top)
@@ -404,7 +405,7 @@ def ViTS16(
     input_shape=None,
     include_top=True,
     weights="imagenet_224_deit",
-    pooling=None,
+    pooling="cls",
     feature_dim=None,
     classes=1000,
     classifier_activation=None,
@@ -440,7 +441,7 @@ def ViTB16(
     input_shape=None,
     include_top=True,
     weights="imagenet21k+_224",
-    pooling=None,
+    pooling="cls",
     feature_dim=None,
     classes=1000,
     classifier_activation=None,
@@ -476,7 +477,7 @@ def ViTB32(
     input_shape=None,
     include_top=True,
     weights="imagenet21k+_384",
-    pooling=None,
+    pooling="cls",
     feature_dim=None,
     classes=1000,
     classifier_activation=None,
@@ -512,7 +513,7 @@ def ViTL16(
     input_shape=None,
     include_top=True,
     weights="imagenet21k+_224",
-    pooling=None,
+    pooling="cls",
     feature_dim=None,
     classes=1000,
     classifier_activation=None,
@@ -548,7 +549,7 @@ def ViTL32(
     input_shape=None,
     include_top=True,
     weights="imagenet21k+_384",
-    pooling=None,
+    pooling="cls",
     feature_dim=None,
     classes=1000,
     classifier_activation=None,
@@ -585,7 +586,7 @@ def DeiTS16(
     input_shape=None,
     include_top=True,
     weights="imagenet_224",
-    pooling=None,
+    pooling="cls",
     classes=1000,
     classifier_activation=None,
 ):
@@ -621,7 +622,7 @@ def DeiTB16(
     input_shape=None,
     include_top=True,
     weights="imagenet_224",
-    pooling=None,
+    pooling="cls",
     classes=1000,
     classifier_activation=None,
 ):

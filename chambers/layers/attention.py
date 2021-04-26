@@ -90,8 +90,9 @@ class MultiHeadAttention(tf.keras.layers.Layer):
         dense_kernel_initializer="glorot_uniform",
         dropout_rate=0.1,
         causal=False,
+        **kwargs
     ):
-        super(MultiHeadAttention, self).__init__()
+        super(MultiHeadAttention, self).__init__(**kwargs)
         self.head_dim = head_dim
         self.num_heads = num_heads
         self.dense_kernel_initializer = dense_kernel_initializer
@@ -106,7 +107,8 @@ class MultiHeadAttention(tf.keras.layers.Layer):
         self.permute_mask = tf.keras.layers.Permute((2, 1))
 
     def build(self, input_shape):
-        (b, _, d) = input_shape[0]
+        d = input_shape[0][-1]
+
         self.w_query = self.add_weight(
             name="w_query",
             shape=(d, self.num_heads, self.head_dim),
@@ -209,20 +211,29 @@ class MultiHeadAttention(tf.keras.layers.Layer):
         return None
 
     def get_config(self):
+        if isinstance(self.dense_kernel_initializer, tf.keras.initializers.Initializer):
+            dense_kernel_initializer = tf.keras.initializers.serialize(
+                self.dense_kernel_initializer
+            )
+        else:
+            dense_kernel_initializer = self.dense_kernel_initializer
+
         config = {
             "head_dim": self.head_dim,
             "num_heads": self.num_heads,
-            "dense_kernel_initializer": tf.keras.initializers.serialize(
-                self.dense_kernel_initializer
-            ),
+            "dense_kernel_initializer": dense_kernel_initializer,
             "dropout_rate": self.dropout_rate,
             "causal": self.causal,
         }
         base_config = super(MultiHeadAttention, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
+    @classmethod
     def from_config(cls, config):
-        config["dense_kernel_initializer"] = tf.keras.initializers.deserialize(
-            config["dense_kernel_initializer"]
-        )
+        if isinstance(
+            config["dense_kernel_initializer"], tf.keras.initializers.Initializer
+        ):
+            config["dense_kernel_initializer"] = tf.keras.initializers.deserialize(
+                config["dense_kernel_initializer"]
+            )
         return cls(**config)

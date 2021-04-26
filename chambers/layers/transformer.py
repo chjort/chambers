@@ -16,8 +16,9 @@ class EncoderLayer(tf.keras.layers.Layer):
         dense_dropout_rate=0.1,
         norm_epsilon=1e-6,
         pre_norm=False,
+        **kwargs,
     ):
-        super(EncoderLayer, self).__init__()
+        super(EncoderLayer, self).__init__(**kwargs)
         self.embed_dim = embed_dim
         self.num_heads = num_heads
         self.ff_dim = ff_dim
@@ -96,6 +97,7 @@ class EncoderLayer(tf.keras.layers.Layer):
         base_config = super(EncoderLayer, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
+    @classmethod
     def from_config(cls, config):
         if isinstance(
             config["dense_kernel_initializer"], tf.keras.initializers.Initializer
@@ -120,8 +122,9 @@ class DecoderLayer(tf.keras.layers.Layer):
         norm_epsilon=1e-6,
         pre_norm=False,
         causal=True,
+        **kwargs,
     ):
-        super(DecoderLayer, self).__init__()
+        super(DecoderLayer, self).__init__(**kwargs)
         self.embed_dim = embed_dim  # TODO: get embed_dim from inputs_shape passed to build and remove this argument.
         self.num_heads = num_heads
         self.ff_dim = ff_dim
@@ -237,6 +240,7 @@ class DecoderLayer(tf.keras.layers.Layer):
         base_config = super(DecoderLayer, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
+    @classmethod
     def from_config(cls, config):
         if isinstance(
             config["dense_kernel_initializer"], tf.keras.initializers.Initializer
@@ -262,7 +266,7 @@ class Encoder(tf.keras.layers.Layer):
         norm_epsilon=1e-6,
         pre_norm=False,
         norm_output=False,
-        **kwargs
+        **kwargs,
     ):
         self.embed_dim = embed_dim
         self.num_heads = num_heads
@@ -332,6 +336,7 @@ class Encoder(tf.keras.layers.Layer):
         base_config = super(Encoder, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
+    @classmethod
     def from_config(cls, config):
         if isinstance(
             config["dense_kernel_initializer"], tf.keras.initializers.Initializer
@@ -359,7 +364,7 @@ class Decoder(tf.keras.layers.Layer):
         norm_output=False,
         causal=True,
         return_sequence=False,
-        **kwargs
+        **kwargs,
     ):
         self.embed_dim = embed_dim
         self.num_heads = num_heads
@@ -397,6 +402,7 @@ class Decoder(tf.keras.layers.Layer):
             )
             for i in range(self.num_layers)
         ]
+        super(Decoder, self).build(input_shape)
 
     def call(self, inputs, mask=None, training=None, **kwargs):
         x, x_encoder = inputs
@@ -449,9 +455,10 @@ class Decoder(tf.keras.layers.Layer):
             "causal": self.causal,
             "return_sequence": self.return_sequence,
         }
-        base_config = super(EncoderLayer, self).get_config()
+        base_config = super(Decoder, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
+    @classmethod
     def from_config(cls, config):
         if isinstance(
             config["dense_kernel_initializer"], tf.keras.initializers.Initializer

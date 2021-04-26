@@ -82,6 +82,8 @@ def precision_at_k(binary_ranking, k: int):
 
 
 def mean_average_precision(binary_ranking, k: int = None):
+    binary_ranking = tf.cast(binary_ranking, tf.float32)
+
     if k is None or k > tf.shape(binary_ranking)[1]:
         k = tf.shape(binary_ranking)[1]
 

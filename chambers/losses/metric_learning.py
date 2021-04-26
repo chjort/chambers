@@ -59,6 +59,12 @@ class PairLoss(tf.keras.losses.Loss, abc.ABC):
         """
         return tf.matmul(y_pred, y_pred, transpose_b=True)
 
+    def compute_signed_masks(self, y_true):
+        y_true = tf.reshape(y_true, [-1, 1])
+        pos_mask = tf.equal(y_true, tf.transpose(y_true))
+        neg_mask = tf.logical_not(pos_mask)
+        return pos_mask, neg_mask
+
     def get_signed_pairs(
         self, similarity_matrix: tf.Tensor, y_true: tf.Tensor
     ) -> Tuple[tf.RaggedTensor, tf.RaggedTensor]:
@@ -69,13 +75,11 @@ class PairLoss(tf.keras.losses.Loss, abc.ABC):
         :param y_true: The class labels for the embeddings as a Tensor with shape [n].
         :return: Positive pairs and negative pairs as a tuple of 2D RaggedTensors each with shape [n, 0... n].
         """
-        y_true = tf.reshape(y_true, [-1, 1])
-        pos_pair_mask = tf.equal(y_true, tf.transpose(y_true))
-        neg_pair_mask = tf.logical_not(pos_pair_mask)
+        pos_mask, neg_pair_mask = self.compute_signed_masks(y_true)
 
         if self.ignore_negative_labels:
             not_triplet_neg = tf.greater_equal(y_true, 0)
-            pos_pair_mask = pos_pair_mask & not_triplet_neg
+            pos_mask = pos_mask & not_triplet_neg
             neg_pair_mask = neg_pair_mask & not_triplet_neg
 
         if self.ignore_diag:
@@ -83,11 +87,11 @@ class PairLoss(tf.keras.losses.Loss, abc.ABC):
             nrows = tf.shape(similarity_matrix)[0]
             ncols = tf.shape(similarity_matrix)[1]
             inverse_eye = tf.logical_not(tf.eye(nrows, ncols, dtype=tf.bool))
-            pos_pair_mask = pos_pair_mask & inverse_eye
+            pos_mask = pos_mask & inverse_eye
             neg_pair_mask = neg_pair_mask & inverse_eye
 
         # get similarities of positive pairs
-        pos_mat = tf.ragged.boolean_mask(similarity_matrix, pos_pair_mask)
+        pos_mat = tf.ragged.boolean_mask(similarity_matrix, pos_mask)
 
         # get similarities of negative pairs
         neg_mat = tf.ragged.boolean_mask(similarity_matrix, neg_pair_mask)
@@ -108,60 +112,13 @@ class PairLoss(tf.keras.losses.Loss, abc.ABC):
 
 
 class PairMatrixLoss(PairLoss):
+    def compute_similarity_matrix(self, y_pred: tf.Tensor) -> tf.Tensor:
+        return y_pred
 
-    def call(self, y_true, y_pred) -> tf.Tensor:
-        """
-        Computes the loss of embeddings based on the similarity between pairs.
-        :param y_true: The binary labels for the similarity matrix as a matrix with shape [n, m]
-        :param y_pred: The similarity matrix between pairs with shape [n, m]
-        :return: The loss as a scalar Tensor
-        """
-        y_true = tf.convert_to_tensor(y_true)
-        y_pred = tf.convert_to_tensor(y_pred)
-
-        # split similarity matrix into similarites for positive pairs and similarities for negative pairs
-        positive_pairs, negative_pairs = self.get_signed_pairs(y_pred, y_true)
-
-        if self.miner is not None:
-            # Mine for informative pairs
-            positive_pairs, negative_pairs = self.miner(positive_pairs, negative_pairs)
-
-        loss = self.compute_loss(positive_pairs, negative_pairs)
-        return loss
-
-    def get_signed_pairs(
-        self, similarity_matrix: tf.Tensor, y_true: tf.Tensor
-    ) -> Tuple[tf.RaggedTensor, tf.RaggedTensor]:
-        """
-
-        :param similarity_matrix: The similarity scores between the embeddings as A 2D Tensor of shape
-                [n, n].
-        :param y_true: The class labels for the embeddings as a Tensor with shape [n].
-        :return: Positive pairs and negative pairs as a tuple of 2D RaggedTensors each with shape [n, 0... n].
-        """
-        pos_pair_mask = tf.cast(y_true, tf.bool)
-        neg_pair_mask = tf.logical_not(pos_pair_mask)
-
-        if self.ignore_negative_labels:
-            not_triplet_neg = tf.greater_equal(y_true, 0)
-            pos_pair_mask = pos_pair_mask & not_triplet_neg
-            neg_pair_mask = neg_pair_mask & not_triplet_neg
-
-        if self.ignore_diag:
-            # ignore mirror pairs
-            nrows = tf.shape(similarity_matrix)[0]
-            ncols = tf.shape(similarity_matrix)[1]
-            inverse_eye = tf.logical_not(tf.eye(nrows, ncols, dtype=tf.bool))
-            pos_pair_mask = pos_pair_mask & inverse_eye
-            neg_pair_mask = neg_pair_mask & inverse_eye
-
-        # get similarities of positive pairs
-        pos_mat = tf.ragged.boolean_mask(similarity_matrix, pos_pair_mask)
-
-        # get similarities of negative pairs
-        neg_mat = tf.ragged.boolean_mask(similarity_matrix, neg_pair_mask)
-
-        return pos_mat, neg_mat
+    def compute_signed_masks(self, y_true):
+        pos_mask = tf.cast(y_true, tf.bool)
+        neg_mask = tf.logical_not(pos_mask)
+        return pos_mask, neg_mask
 
 
 @tf.keras.utils.register_keras_serializable(package="Chambers")
@@ -234,15 +191,15 @@ class MultiSimilarityLossMatrix(PairMatrixLoss):
     """
 
     def __init__(
-            self,
-            pos_scale=2.0,
-            neg_scale=40.0,
-            threshold=0.5,
-            ignore_diag=True,
-            ignore_negative_labels=True,
-            miner=_MSMiner(margin=0.1),
-            name="multi_similarity_loss",
-            **kwargs,
+        self,
+        pos_scale=2.0,
+        neg_scale=40.0,
+        threshold=0.5,
+        ignore_diag=True,
+        ignore_negative_labels=True,
+        miner=_MSMiner(margin=0.1),
+        name="multi_similarity_loss",
+        **kwargs,
     ):
         super().__init__(
             ignore_diag=ignore_diag,
@@ -257,22 +214,22 @@ class MultiSimilarityLossMatrix(PairMatrixLoss):
 
     def compute_loss(self, positive_pairs, negative_pairs):
         pos_loss = (
-                tf.math.log(
-                    1
-                    + tf.reduce_sum(
-                        tf.exp(-self.pos_scale * (positive_pairs - self.threshold)), axis=1
-                    )
+            tf.math.log(
+                1
+                + tf.reduce_sum(
+                    tf.exp(-self.pos_scale * (positive_pairs - self.threshold)), axis=1
                 )
-                / self.pos_scale
+            )
+            / self.pos_scale
         )
         neg_loss = (
-                tf.math.log(
-                    1
-                    + tf.reduce_sum(
-                        tf.exp(self.neg_scale * (negative_pairs - self.threshold)), axis=1
-                    )
+            tf.math.log(
+                1
+                + tf.reduce_sum(
+                    tf.exp(self.neg_scale * (negative_pairs - self.threshold)), axis=1
                 )
-                / self.neg_scale
+            )
+            / self.neg_scale
         )
 
         return pos_loss + neg_loss

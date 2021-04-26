@@ -1,3 +1,5 @@
+import os
+
 import faiss
 import tensorflow as tf
 
@@ -131,3 +133,52 @@ class PairedRankingMetricCallback(tf.keras.callbacks.Callback):
             metric_name = "{}".format(metric_fn.__name__)
             metric_score = metric_fn(binary_ranking)
             logs[metric_name] = metric_score
+
+
+class ExperimentCallback(tf.keras.callbacks.CallbackList):
+    def __init__(
+        self,
+        experiments_dir,
+        checkpoint_monitor,
+        checkpoint_mode="max",
+        tensorboard_update_freq="epoch",
+        tensorboard_write_graph=True,
+    ):
+        self.log_dir = os.path.join(experiments_dir, "logs")
+        self.model_dir = os.path.join(experiments_dir, "model")
+        self.checkpoint_dir = os.path.join(self.model_dir, "checkpoints")
+        self.export_dir = os.path.join(self.model_dir, "export")
+
+        csv_logger = tf.keras.callbacks.CSVLogger(
+            filename=os.path.join(self.log_dir, "epoch_results.txt")
+        )
+        checkpointer = tf.keras.callbacks.ModelCheckpoint(
+            filepath=os.path.join(
+                self.checkpoint_dir, "{epoch:02d}-{" + checkpoint_monitor + ":.5f}.h5"
+            ),
+            monitor=checkpoint_monitor,
+            mode=checkpoint_mode,
+            save_weights_only=True,
+        )
+        tensorboard = tf.keras.callbacks.TensorBoard(
+            log_dir=self.log_dir,
+            update_freq=tensorboard_update_freq,
+            profile_batch=0,
+            write_graph=tensorboard_write_graph,
+        )
+        callbacks = [csv_logger, checkpointer, tensorboard]
+
+        super(ExperimentCallback, self).__init__(
+            callbacks=callbacks, add_history=False, add_progbar=False
+        )
+
+    def on_train_begin(self, logs=None):
+        os.makedirs(self.log_dir, exist_ok=True)
+        os.makedirs(self.checkpoint_dir, exist_ok=True)
+        os.makedirs(self.export_dir, exist_ok=True)
+        self.model.save_weights(os.path.join(self.checkpoint_dir, "init.h5"))
+        super(ExperimentCallback, self).on_train_begin(logs)
+
+    def on_train_end(self, logs=None):
+        self.model.save(os.path.join(self.model_dir, "save"), include_optimizer=True)
+        super(ExperimentCallback, self).on_train_end(logs)

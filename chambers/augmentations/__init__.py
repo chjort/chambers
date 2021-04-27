@@ -14,6 +14,7 @@ from tensorflow.keras.layers.experimental.preprocessing import (
 from .image_augmentations import (
     ImageNetNormalization,
     ResizingMinMax,
+    RandomChoice,
     RandomChance,
     AutoContrast,
     Equalize,

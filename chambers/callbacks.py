@@ -11,20 +11,7 @@ from chambers.utils.data import batch_predict_pairs
 from chambers.utils.ranking import rank_labels
 
 
-def extract_features(dataset, model):
-    features = []
-    labels = []
-    for x, y in dataset:
-        feat = model(x, training=False)
-        features.append(feat)
-        labels.append(y)
-
-    features = tf.concat(features, axis=0)
-    labels = tf.concat(labels, axis=0)
-    return features.numpy(), labels.numpy()
-
-
-class GlobalRankingMetricCallback(tf.keras.callbacks.Callback):
+class FeatureRankingMetricCallback(tf.keras.callbacks.Callback):
     def __init__(
         self,
         dataset: tf.data.Dataset,
@@ -42,13 +29,17 @@ class GlobalRankingMetricCallback(tf.keras.callbacks.Callback):
         self.use_gpu = use_gpu
         self._supports_tf_logs = True
 
+    def set_model(self, model):
+        if self.model is None:
+            self.model = set_predict_return_y(model)
+
     def on_train_begin(self, logs=None):
         self.index = self._build_index()
 
     def on_epoch_end(self, epoch, logs=None):
-        features, labels = extract_features(self.dataset, self.model)
+        features, labels = self.model.predict(self.dataset)
 
-        labels = labels.astype(int)
+        labels = labels.astype(int).reshape([-1])
         self.index.add_with_ids(features, labels)
         binary_ranking = self._compute_binary_ranking(
             features, labels, k=1001, remove_top1=True

@@ -116,7 +116,7 @@ class RandomChoice(preprocessing.PreprocessingLayer):
         if self.elementwise:
             x = tf.expand_dims(inputs, 1)
             x = tf.map_fn(self._random_transforms, x)
-            x = tf.squeeze(x)
+            x = x[:, 0, :, :, :]
         else:
             x = self._random_transforms(inputs)
         return x

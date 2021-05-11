@@ -149,6 +149,7 @@ class ExperimentCallback(tf.keras.callbacks.Callback):
         tensorboard_write_graph=True,
         config_dump=None,
     ):
+        super(ExperimentCallback, self).__init__()
         now_timestamp = datetime.datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
         self.experiment_dir = os.path.join(experiments_dir, now_timestamp)
         self.log_dir = os.path.join(self.experiment_dir, "logs")

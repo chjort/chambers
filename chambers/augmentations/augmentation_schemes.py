@@ -1,14 +1,9 @@
-from packaging import version
 import tensorflow as tf
 from tensorflow.keras.layers.experimental import preprocessing
 from tensorflow.python.keras.engine.input_spec import InputSpec
+from tensorflow.python.keras.utils.tf_utils import smart_cond
 
 from chambers.augmentations import image_augmentations
-
-if version.parse(tf.__version__) < version.parse("2.4"):
-    from tensorflow.python.keras.utils.tf_utils import smart_cond
-else:
-    from tensorflow.python.keras.utils.control_flow_util import smart_cond
 
 _INTERPOLATION_MODE = "nearest"
 _FILL_MODE = "constant"

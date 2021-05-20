@@ -1,7 +1,6 @@
 import inspect
 import os
 import random
-from urllib.request import urlopen, Request
 
 import numpy as np
 import tensorflow as tf
@@ -24,6 +23,12 @@ def deserialize_object(identifier, module_objects, module_name, **kwargs):
         )
 
 
+def set_dtype_policy_deep(module, dtype):
+    module._set_dtype_policy(dtype)
+    for submodule in module.submodules:
+        submodule._set_dtype_policy(dtype)
+
+
 def use_mixed_precision(dtype="mixed_float16", set_epsilon=False):
     policy = tf.keras.mixed_precision.experimental.Policy(name=dtype)
     tf.keras.mixed_precision.experimental.set_policy(policy)
@@ -44,26 +49,6 @@ def set_random_seed(seed: int):
     # Tensorflow seeds
     os.environ["TF_DETERMINISTIC_OPS"] = "1"
     tf.random.set_seed(seed)
-
-
-def download_image(url):
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 6.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/41.0.2228.0 Safari/537.3"
-    }
-    req = Request(url, headers=headers)
-
-    img_file = urlopen(req)
-    return img_file
-
-
-def url_to_img_bytes(url):
-    img_file = download_image(url)
-    return img_file.read()
-
-
-def url_to_img(url):
-    img_bytes = url_to_img_bytes(url)
-    return tf.io.decode_image(img_bytes)
 
 
 def get_model_memory_usage(batch_size, model):

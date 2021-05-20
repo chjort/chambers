@@ -1,5 +1,6 @@
 import glob
 import os
+from urllib.request import Request, urlopen
 
 import tensorflow as tf
 
@@ -78,4 +79,27 @@ def read_and_decode_image(file, channels=3):
     img = tf.image.decode_image(img_bytes, channels=channels, expand_animations=False)
     img.set_shape([None, None, channels])
 
+    return img
+
+
+def open_url(url):
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 6.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/41.0.2228.0 Safari/537.3"
+    }
+    req = Request(url, headers=headers)
+
+    img_file = urlopen(req)
+    return img_file
+
+
+def read_url_bytes(url):
+    img_file = open_url(url)
+    return img_file.read()
+
+
+def url_to_img(url, channels=3, expand_animations=False):
+    img_bytes = read_url_bytes(url)
+    img = tf.io.decode_image(
+        img_bytes, channels=channels, expand_animations=expand_animations
+    )
     return img

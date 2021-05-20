@@ -1,2 +1,2 @@
-tensorflow
-tensorflow_addons
+tensorflow==2.3.2
+tensorflow-addons

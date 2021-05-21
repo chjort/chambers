@@ -1,7 +1,7 @@
 import tensorflow as tf
 
 from chambers.layers.embedding import (
-    PositionalEmbedding1D,
+    PositionalEncoding1D,
 )
 from chambers.layers.transformer import Encoder, Decoder
 
@@ -23,7 +23,7 @@ def Seq2SeqTransformer(
     x_enc = tf.keras.layers.Embedding(
         input_vocab_size, embed_dim, mask_zero=True, name="inputs_embed"
     )(inputs)
-    x_enc = PositionalEmbedding1D(embed_dim, name="inputs_positional_encoding")(x_enc)
+    x_enc = PositionalEncoding1D(embed_dim, name="inputs_positional_encoding")(x_enc)
     x_enc = Encoder(
         embed_dim=embed_dim,
         num_heads=num_heads,
@@ -37,7 +37,7 @@ def Seq2SeqTransformer(
     x_dec = tf.keras.layers.Embedding(
         output_vocab_size, embed_dim, mask_zero=True, name="targets_embed"
     )(targets)
-    x_dec = PositionalEmbedding1D(embed_dim, name="targets_positional_encoding")(x_dec)
+    x_dec = PositionalEncoding1D(embed_dim, name="targets_positional_encoding")(x_dec)
     x_dec = Decoder(
         embed_dim=embed_dim,
         num_heads=num_heads,

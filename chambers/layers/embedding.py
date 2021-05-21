@@ -3,52 +3,54 @@ import tensorflow as tf
 
 
 @tf.keras.utils.register_keras_serializable(package="Chambers")
-class PositionalEmbedding1D(tf.keras.layers.Layer):
+class PositionalEncoding1D(tf.keras.layers.Layer):
     # TODO: Refactor this class to only compute embeddings once, and not every call.
 
-    def __init__(self, embedding_dim, temperature=10000, add_to_input=True, **kwargs):
-        super(PositionalEmbedding1D, self).__init__(**kwargs)
+    def __init__(
+        self, embedding_dim=None, temperature=10000, add_to_input=True, **kwargs
+    ):
+        super(PositionalEncoding1D, self).__init__(**kwargs)
         self.embedding_dim = embedding_dim
-        self.temperature = temperature
+        self.temperature = float(temperature)
         self.add_to_input = add_to_input
         self.supports_masking = True
+
+    def build(self, input_shape):
+        assert len(input_shape) == 3
+        super(PositionalEncoding1D, self).build(input_shape)
 
     def compute_output_shape(self, input_shape):
         return input_shape
 
     def call(self, inputs, mask=None, **kwargs):
-        tf.assert_rank(inputs, 3)
-
-        if mask is not None:
-            tf.assert_rank(mask, 2)
-            ones = tf.cast(mask, tf.float32)
+        sequence_len = tf.shape(inputs)[1]
+        if self.embedding_dim is None:
+            embedding_dim = tf.shape(inputs)[-1]
         else:
-            ones = tf.ones(
-                tf.shape(inputs)[:-1], dtype=tf.float32
-            )  # shape [batch_size, h, w]
+            embedding_dim = self.embedding_dim
 
-        sequence_len = tf.shape(ones)[1]
-        x = self.positional_encoding(sequence_len, self.embedding_dim)
+        x = self.positional_encoding(sequence_len, embedding_dim)
+        x = tf.cast(x, inputs.dtype)
 
         if self.add_to_input:
-            x = inputs + tf.cast(x, inputs.dtype)
+            x = inputs + x
 
         return x
 
-    def get_angles(self, pos, i, d_model):
-        pos = tf.cast(pos, tf.float32)
-        i = tf.cast(i, tf.float32)
-        d_model = tf.cast(d_model, tf.float32)
+    def get_angles(self, seq_range, embedding_range, embedding_dim):
+        seq_range = tf.expand_dims(tf.cast(seq_range, tf.float32), 1)
+        embedding_range = tf.expand_dims(tf.cast(embedding_range, tf.float32), 0)
+        embedding_dim = tf.cast(embedding_dim, tf.float32)
 
-        angle_rates = 1.0 / tf.pow(
-            tf.cast(self.temperature, tf.float32), (2.0 * (i // 2.0)) / d_model
-        )
-        return pos * angle_rates
+        exponent = (2.0 * (embedding_range // 2.0)) / embedding_dim
+        angle_rates = 1.0 / tf.pow(self.temperature, exponent)
+        return seq_range * angle_rates
 
-    def positional_encoding(self, position, d_model):
-        angle_rads = self.get_angles(
-            tf.range(position)[:, tf.newaxis], tf.range(d_model)[tf.newaxis, :], d_model
-        )
+    def positional_encoding(self, seq_len, embedding_dim):
+        seq_range = tf.range(seq_len)
+        embedding_range = tf.range(embedding_dim)
+
+        angle_rads = self.get_angles(seq_range, embedding_range, embedding_dim)
 
         # apply sin to even indices in the array; 2i
         sine_pos = tf.sin(angle_rads[:, 0::2])
@@ -57,14 +59,10 @@ class PositionalEmbedding1D(tf.keras.layers.Layer):
         cos_pos = tf.cos(angle_rads[:, 1::2])
 
         # interleave sine and cosine
-        pos_encoding = tf.reshape(
-            tf.concat([sine_pos[..., tf.newaxis], cos_pos[..., tf.newaxis]], axis=-1),
-            [tf.shape(sine_pos)[0], -1],
-        )
+        sine_cos = tf.stack([sine_pos, cos_pos], axis=-1)
+        pos_encoding = tf.reshape(sine_cos, [1, seq_len, -1])
 
-        pos_encoding = pos_encoding[tf.newaxis, ...]
-
-        return tf.cast(pos_encoding, dtype=tf.float32)
+        return pos_encoding
 
     def get_config(self):
         config = {
@@ -72,12 +70,12 @@ class PositionalEmbedding1D(tf.keras.layers.Layer):
             "temperature": self.temperature,
             "add_to_input": self.add_to_input,
         }
-        base_config = super(PositionalEmbedding1D, self).get_config()
+        base_config = super(PositionalEncoding1D, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
 
 @tf.keras.utils.register_keras_serializable(package="Chambers")
-class PositionalEmbedding2D(tf.keras.layers.Layer):
+class PositionalEncoding2D(tf.keras.layers.Layer):
     # TODO: Refactor this class to only compute embeddings once, and not every call.
 
     # These are the default parameters used in the original project
@@ -164,7 +162,7 @@ class PositionalEmbedding2D(tf.keras.layers.Layer):
             "eps": self.eps,
             "add_to_input": self.add_to_input,
         }
-        base_config = super(PositionalEmbedding2D, self).get_config()
+        base_config = super(PositionalEncoding2D, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
 

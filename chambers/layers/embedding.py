@@ -11,6 +11,26 @@ def angle_rates(embedding_range, embedding_dim, temperature=10000.0):
     return angle_rates
 
 
+def sequence_sin_cos_angles(seq, embedding_dim, temperature=10000.0):
+    embedding_range = tf.range(embedding_dim, dtype=tf.float32)
+
+    angles = angle_rates(embedding_range, embedding_dim, temperature)
+    angle_rads = seq * angles
+
+    # apply sin to even indices in the array; 2i
+    sine_pos = tf.sin(angle_rads[..., 0::2])
+
+    # apply cos to odd indices in the array; 2i+1
+    cos_pos = tf.cos(angle_rads[..., 1::2])
+
+    # interleave sine and cosine
+    sine_cos = tf.stack([sine_pos, cos_pos], axis=-1)
+
+    seq_len = tf.shape(seq)[0]
+    pos_encoding = tf.reshape(sine_cos, [1, seq_len, -1])
+    return pos_encoding
+
+
 @tf.keras.utils.register_keras_serializable(package="Chambers")
 class PositionalEncoding1D(tf.keras.layers.Layer):
     def __init__(self, temperature=10000, add_to_input=True, **kwargs):
@@ -35,22 +55,10 @@ class PositionalEncoding1D(tf.keras.layers.Layer):
         return x
 
     def positional_encoding(self, seq_len, embedding_dim):
-        seq_range = tf.range(seq_len, dtype=tf.float32)
-        embedding_range = tf.range(embedding_dim, dtype=tf.float32)
-
-        angles = angle_rates(embedding_range, embedding_dim, self.temperature)
-        angle_rads = tf.expand_dims(seq_range, 1) * angles
-
-        # apply sin to even indices in the array; 2i
-        sine_pos = tf.sin(angle_rads[:, 0::2])
-
-        # apply cos to odd indices in the array; 2i+1
-        cos_pos = tf.cos(angle_rads[:, 1::2])
-
-        # interleave sine and cosine
-        sine_cos = tf.stack([sine_pos, cos_pos], axis=-1)
-        pos_encoding = tf.reshape(sine_cos, [1, seq_len, -1])
-
+        seq_range = tf.expand_dims(tf.range(seq_len, dtype=tf.float32), 1)
+        pos_encoding = sequence_sin_cos_angles(
+            seq_range, embedding_dim, self.temperature
+        )
         return pos_encoding
 
     def get_config(self):
@@ -64,7 +72,6 @@ class PositionalEncoding1D(tf.keras.layers.Layer):
 
 @tf.keras.utils.register_keras_serializable(package="Chambers")
 class PositionalEncoding2D(tf.keras.layers.Layer):
-    # TODO: Refactor this class to only compute embeddings once, and not every call.
 
     # These are the default parameters used in the original project
     def __init__(
@@ -93,69 +100,43 @@ class PositionalEncoding2D(tf.keras.layers.Layer):
         height = input_shape[1]
         width = input_shape[2]
         embedding_dim = input_shape[3]
-
-        self.embedding_dim = embedding_dim
-        self.embedding_dim_1d = embedding_dim // 2
+        embedding_dim_1d = embedding_dim // 2
+        self._pos_encoding = self.positional_encoding(height, width, embedding_dim_1d)
 
         super(PositionalEncoding2D, self).build(input_shape)
 
     def call(self, inputs, mask=None, **kwargs):
-        tf.assert_rank(inputs, 4)
-
-        if mask is not None:
-            tf.assert_rank(mask, 3)
-            ones = tf.cast(mask, tf.float32)
-        else:
-            ones = tf.ones(
-                tf.shape(inputs)[:-1], dtype=tf.float32
-            )  # shape [batch_size, h, w]
-
-        x = self.compute_positional_mask(ones)
+        x = tf.cast(self._pos_encoding, inputs.dtype)
 
         if self.add_to_input:
-            x = inputs + tf.cast(x, inputs.dtype)
+            x = inputs + x
 
         return x
 
-    def compute_positional_mask(self, input_mask):
-        bz = tf.shape(input_mask)[0]
-        height = tf.shape(input_mask)[1]
-        width = tf.shape(input_mask)[2]
-
-        ones_mask = tf.ones([bz, height, width])
-        y_embed = tf.cumsum(ones_mask, axis=1)
-        x_embed = tf.cumsum(ones_mask, axis=2)
-        embedding_range = tf.range(self.embedding_dim_1d, dtype=tf.float32)
-
-        tf.print(tf.shape(input_mask))
-        tf.print(tf.shape(y_embed))
-        tf.print(tf.shape(x_embed))
+    def positional_encoding(self, height, width, embedding_dim):
+        height_range = tf.reshape(tf.range(width, dtype=tf.float32), [-1, 1, 1])
+        width_range = tf.reshape(tf.range(height, dtype=tf.float32), [-1, 1, 1])
 
         if self.normalize:
-            y_embed = y_embed / (y_embed[:, -1:, :] + self.eps) * self.scale
-            x_embed = x_embed / (x_embed[:, :, -1:] + self.eps) * self.scale
+            height_max = height_range[-1:, ...] + self.eps
+            width_max = height_range[-1:, ...] + self.eps
+            height_range = height_range / height_max * self.scale
+            width_range = width_range / width_max * self.scale
 
-        angles = angle_rates(embedding_range, self.embedding_dim_1d, self.temperature)
+        sine_cos_x = sequence_sin_cos_angles(
+            height_range, embedding_dim, self.temperature
+        )
+        sine_cos_y = sequence_sin_cos_angles(
+            width_range, embedding_dim, self.temperature
+        )
+        sine_cos_y = tf.transpose(sine_cos_y, [1, 0, 2])
 
-        angle_rads_x = x_embed[..., tf.newaxis] * angles
-        angle_rads_y = y_embed[..., tf.newaxis] * angles
+        sine_cos_x = tf.broadcast_to(sine_cos_x, [height, width, embedding_dim])
+        sine_cos_y = tf.broadcast_to(sine_cos_y, [height, width, embedding_dim])
 
-        # apply sin to even indices in the array; 2i
-        sine_pos_x = tf.sin(angle_rads_x[..., 0::2])
-        sine_pos_y = tf.sin(angle_rads_y[..., 0::2])
+        pos_encoding = tf.concat([sine_cos_y, sine_cos_x], axis=-1)
+        pos_encoding = tf.expand_dims(pos_encoding, 0)
 
-        # apply cos to odd indices in the array; 2i+1
-        cos_pos_x = tf.cos(angle_rads_x[..., 1::2])
-        cos_pos_y = tf.cos(angle_rads_y[..., 1::2])
-
-        sine_cos_x = tf.stack([sine_pos_x, cos_pos_x], axis=-1)
-        sine_cos_y = tf.stack([sine_pos_y, cos_pos_y], axis=-1)
-
-        shape = [bz, height, width, -1]
-        sine_cos_x = tf.reshape(sine_cos_x, shape)
-        sine_cos_y = tf.reshape(sine_cos_y, shape)
-
-        pos_encoding = tf.concat([sine_cos_y, sine_cos_x], axis=3)
         return pos_encoding
 
     def get_config(self):

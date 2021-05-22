@@ -11,6 +11,26 @@ def angle_rates(embedding_range, embedding_dim, temperature=10000.0):
     return angle_rates
 
 
+def sequence_sin_cos_angles(seq, embedding_dim, temperature=10000.0):
+    embedding_range = tf.range(embedding_dim, dtype=tf.float32)
+
+    angles = angle_rates(embedding_range, embedding_dim, temperature)
+    angle_rads = seq * angles
+
+    # apply sin to even indices in the array; 2i
+    sine_pos = tf.sin(angle_rads[..., 0::2])
+
+    # apply cos to odd indices in the array; 2i+1
+    cos_pos = tf.cos(angle_rads[..., 1::2])
+
+    # interleave sine and cosine
+    sine_cos = tf.stack([sine_pos, cos_pos], axis=-1)
+
+    seq_len = tf.shape(seq)[0]
+    pos_encoding = tf.reshape(sine_cos, [1, seq_len, -1])
+    return pos_encoding
+
+
 @tf.keras.utils.register_keras_serializable(package="Chambers")
 class PositionalEncoding1D(tf.keras.layers.Layer):
     def __init__(self, temperature=10000, add_to_input=True, **kwargs):
@@ -35,22 +55,10 @@ class PositionalEncoding1D(tf.keras.layers.Layer):
         return x
 
     def positional_encoding(self, seq_len, embedding_dim):
-        seq_range = tf.range(seq_len, dtype=tf.float32)
-        embedding_range = tf.range(embedding_dim, dtype=tf.float32)
-
-        angles = angle_rates(embedding_range, embedding_dim, self.temperature)
-        angle_rads = tf.expand_dims(seq_range, 1) * angles
-
-        # apply sin to even indices in the array; 2i
-        sine_pos = tf.sin(angle_rads[:, 0::2])
-
-        # apply cos to odd indices in the array; 2i+1
-        cos_pos = tf.cos(angle_rads[:, 1::2])
-
-        # interleave sine and cosine
-        sine_cos = tf.stack([sine_pos, cos_pos], axis=-1)
-        pos_encoding = tf.reshape(sine_cos, [1, seq_len, -1])
-
+        seq_range = tf.expand_dims(tf.range(seq_len, dtype=tf.float32), 1)
+        pos_encoding = sequence_sin_cos_angles(
+            seq_range, embedding_dim, self.temperature
+        )
         return pos_encoding
 
     def get_config(self):
@@ -64,7 +72,6 @@ class PositionalEncoding1D(tf.keras.layers.Layer):
 
 @tf.keras.utils.register_keras_serializable(package="Chambers")
 class PositionalEncoding2D(tf.keras.layers.Layer):
-    # TODO: Refactor this class to only compute embeddings once, and not every call.
 
     # These are the default parameters used in the original project
     def __init__(
@@ -107,37 +114,21 @@ class PositionalEncoding2D(tf.keras.layers.Layer):
         return x
 
     def positional_encoding(self, height, width, embedding_dim):
-        y_embed = tf.expand_dims(tf.range(height, dtype=tf.float32), 1)
-        x_embed = tf.expand_dims(tf.range(width, dtype=tf.float32), 0)
-        embedding_range = tf.range(embedding_dim, dtype=tf.float32)
+        height_range = tf.reshape(tf.range(width, dtype=tf.float32), [-1, 1, 1])
+        width_range = tf.reshape(tf.range(height, dtype=tf.float32), [-1, 1, 1])
 
         if self.normalize:
-            y_embed = y_embed / (y_embed[-1:, :] + self.eps) * self.scale
-            x_embed = x_embed / (x_embed[:, -1:] + self.eps) * self.scale
+            height_range = height_range / (height_range[-1:, ...] + self.eps) * self.scale
+            width_range = width_range / (width_range[-1:, ...] + self.eps) * self.scale
 
-        angles = angle_rates(embedding_range, embedding_dim, self.temperature)
-
-        angle_rads_x = x_embed[..., tf.newaxis] * angles
-        angle_rads_y = y_embed[..., tf.newaxis] * angles
-
-        # apply sin to even indices in the array; 2i
-        sine_pos_x = tf.sin(angle_rads_x[..., 0::2])
-        sine_pos_y = tf.sin(angle_rads_y[..., 0::2])
-
-        # apply cos to odd indices in the array; 2i+1
-        cos_pos_x = tf.cos(angle_rads_x[..., 1::2])
-        cos_pos_y = tf.cos(angle_rads_y[..., 1::2])
-
-        sine_cos_x = tf.stack([sine_pos_x, cos_pos_x], axis=-1)
-        sine_cos_y = tf.stack([sine_pos_y, cos_pos_y], axis=-1)
-
-        sine_cos_x = tf.reshape(sine_cos_x, [1, width, -1])
-        sine_cos_y = tf.reshape(sine_cos_y, [1, height, -1])
+        sine_cos_x = sequence_sin_cos_angles(
+            height_range, embedding_dim, self.temperature
+        )
+        sine_cos_y = sequence_sin_cos_angles(
+            width_range, embedding_dim, self.temperature
+        )
         sine_cos_y = tf.transpose(sine_cos_y, [1, 0, 2])
 
-        # x: [1, 64, 64]
-        # y: [32, 1, 64]
-        # pos: [1, 32, 64, 128]
         sine_cos_x = tf.broadcast_to(sine_cos_x, [height, width, embedding_dim])
         sine_cos_y = tf.broadcast_to(sine_cos_y, [height, width, embedding_dim])
 

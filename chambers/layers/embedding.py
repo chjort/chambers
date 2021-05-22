@@ -118,8 +118,10 @@ class PositionalEncoding2D(tf.keras.layers.Layer):
         width_range = tf.reshape(tf.range(height, dtype=tf.float32), [-1, 1, 1])
 
         if self.normalize:
-            height_range = height_range / (height_range[-1:, ...] + self.eps) * self.scale
-            width_range = width_range / (width_range[-1:, ...] + self.eps) * self.scale
+            height_max = height_range[-1:, ...] + self.eps
+            width_max = height_range[-1:, ...] + self.eps
+            height_range = height_range / height_max * self.scale
+            width_range = width_range / width_max * self.scale
 
         sine_cos_x = sequence_sin_cos_angles(
             height_range, embedding_dim, self.temperature

@@ -100,8 +100,7 @@ class PositionalEncoding2D(tf.keras.layers.Layer):
         height = input_shape[1]
         width = input_shape[2]
         embedding_dim = input_shape[3]
-        embedding_dim_1d = embedding_dim // 2
-        self._pos_encoding = self.positional_encoding(height, width, embedding_dim_1d)
+        self._pos_encoding = self.positional_encoding(height, width, embedding_dim)
 
         super(PositionalEncoding2D, self).build(input_shape)
 
@@ -123,16 +122,18 @@ class PositionalEncoding2D(tf.keras.layers.Layer):
             height_range = height_range / height_max * self.scale
             width_range = width_range / width_max * self.scale
 
+        embedding_dim_1d = embedding_dim // 2
+
         sine_cos_x = sequence_sin_cos_angles(
-            height_range, embedding_dim, self.temperature
+            height_range, embedding_dim_1d, self.temperature
         )
         sine_cos_y = sequence_sin_cos_angles(
-            width_range, embedding_dim, self.temperature
+            width_range, embedding_dim_1d, self.temperature
         )
         sine_cos_y = tf.transpose(sine_cos_y, [1, 0, 2])
 
-        sine_cos_x = tf.broadcast_to(sine_cos_x, [height, width, embedding_dim])
-        sine_cos_y = tf.broadcast_to(sine_cos_y, [height, width, embedding_dim])
+        sine_cos_x = tf.broadcast_to(sine_cos_x, [height, width, embedding_dim_1d])
+        sine_cos_y = tf.broadcast_to(sine_cos_y, [height, width, embedding_dim_1d])
 
         pos_encoding = tf.concat([sine_cos_y, sine_cos_x], axis=-1)
         pos_encoding = tf.expand_dims(pos_encoding, 0)

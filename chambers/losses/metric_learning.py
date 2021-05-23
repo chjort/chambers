@@ -271,17 +271,23 @@ class ContrastiveLoss(PairLoss):
         self, positive_pairs: tf.RaggedTensor, negative_pairs: tf.RaggedTensor
     ):
         # if positive pair similarity is lower than the positive margin, it contributes to the loss
-        pos_pairs_loss = (
-            tf.pow(self.positive_margin - positive_pairs, self.exponent) / self.exponent
-        )
-        pos_loss = tf.reduce_sum(pos_pairs_loss, axis=1)
+        # pos_pairs_loss = (
+        #     tf.pow(self.positive_margin - positive_pairs, self.exponent) / self.exponent
+        # )
+        # pos_loss = tf.reduce_sum(pos_pairs_loss, axis=1)
+
+        pos_pairs_loss = tf.maximum(0, self.positive_margin - positive_pairs)
+        pos_loss = tf.reduce_mean(pos_pairs_loss, axis=1)
 
         # if negative pair similarity is larger than the negative margin, it contributes to the loss
-        neg_pairs_loss = (
-            tf.pow(tf.maximum(0, negative_pairs - self.negative_margin), self.exponent)
-            / self.exponent
-        )
-        neg_loss = tf.reduce_sum(neg_pairs_loss, axis=1)
+        # neg_pairs_loss = (
+        #     tf.pow(tf.maximum(0, negative_pairs - self.negative_margin), self.exponent)
+        #     / self.exponent
+        # )
+        # neg_loss = tf.reduce_sum(neg_pairs_loss, axis=1)
+
+        neg_pairs_loss = tf.maximum(0, negative_pairs - self.negative_margin)
+        neg_loss = tf.reduce_mean(neg_pairs_loss, axis=1)
 
         return pos_loss + neg_loss
 

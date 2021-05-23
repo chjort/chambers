@@ -71,9 +71,9 @@ def ranking_accuracy(binary_ranking):
 
 
 def recall_at_k(binary_ranking, k: int):
-    return tf.reduce_mean(
-        tf.cast(tf.reduce_sum(binary_ranking[:, :k], axis=1) > 0, tf.float32)
-    )
+    n_pos_k = tf.reduce_sum(binary_ranking[:, :k], axis=1)
+    pos_k = tf.cast(n_pos_k > 0, tf.float32)
+    return tf.reduce_mean(pos_k)
 
 
 def precision_at_k(binary_ranking, k: int):
@@ -97,3 +97,23 @@ def mean_average_precision(binary_ranking, k: int = None):
         tf.reduce_sum(k_precisions, axis=1), n_positive_predictions
     )
     return tf.reduce_mean(average_precision_at_k)
+
+# %%
+# nr, nc = 10, 10
+# m = tf.cast(tf.random.uniform([nr, nc]) > 0.5, tf.int32)
+# ranges = tf.cumsum(tf.ones([nr, nc], dtype=tf.int32), axis=1)
+# n_pos = tf.expand_dims(tf.reduce_sum(m, axis=1), 1)
+#
+# ym = tf.cast(ranges <= n_pos, tf.int32)
+#
+# #%%
+# first1 = tf.expand_dims(tf.cast(tf.argmin(m == 0, axis=1), tf.int32), 1)
+# top_neg = tf.cast((ranges - 1) < first1, tf.int32)
+#
+# k = 3
+# tf.reduce_mean(tf.cast(tf.reduce_sum(top_neg, axis=1) < k, tf.float32))
+# recall_at_k(m, k)
+#
+# #%%
+#
+# recall_at_k(m, k=2)

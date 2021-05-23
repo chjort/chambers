@@ -5,7 +5,7 @@ from tensorflow.python.keras.utils import layer_utils
 
 from chambers.augmentations import ImageNetNormalization
 from chambers.layers.embedding import ConcatEmbedding, LearnedEmbedding1D
-from chambers.layers.reduce import Sum
+from chambers.layers.ops import Sum
 from chambers.layers.transformer import Encoder
 from chambers.utils.layer_utils import inputs_to_input_layer
 

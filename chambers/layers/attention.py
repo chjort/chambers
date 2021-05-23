@@ -2,13 +2,9 @@ import math
 
 import tensorflow as tf
 from packaging import version
+from tensorflow.python.keras.utils.tf_utils import smart_cond
 from tensorflow.python.ops import array_ops
 from tensorflow.python.ops import math_ops
-
-if version.parse(tf.__version__) < version.parse("2.4"):
-    from tensorflow.python.keras.utils.tf_utils import smart_cond
-else:
-    from tensorflow.python.keras.utils.control_flow_util import smart_cond
 
 
 @tf.keras.utils.register_keras_serializable(package="Chambers")

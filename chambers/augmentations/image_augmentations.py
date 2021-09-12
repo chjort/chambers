@@ -3,8 +3,8 @@ from typing import List
 
 import tensorflow as tf
 import tensorflow_addons as tfa
+from tensorflow.keras.layers import InputSpec
 from tensorflow.keras.layers.experimental import preprocessing
-from tensorflow.python.keras.engine.input_spec import InputSpec
 
 
 def blend(image1, image2, factor):

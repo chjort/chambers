@@ -1,7 +1,7 @@
 import tensorflow as tf
+from keras.utils.control_flow_util import smart_cond
+from tensorflow.keras.layers import InputSpec
 from tensorflow.keras.layers.experimental import preprocessing
-from tensorflow.python.keras.engine.input_spec import InputSpec
-from tensorflow.python.keras.utils.tf_utils import smart_cond
 
 from chambers.augmentations import image_augmentations
 

@@ -1,8 +1,8 @@
 import math
 
 import tensorflow as tf
+from keras.utils.control_flow_util import smart_cond
 from packaging import version
-from tensorflow.python.keras.utils.tf_utils import smart_cond
 from tensorflow.python.ops import array_ops
 from tensorflow.python.ops import math_ops
 

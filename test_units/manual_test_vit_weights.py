@@ -1,3 +1,6 @@
+import os
+
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 import collections
 
 import numpy as np
@@ -7,8 +10,8 @@ import timm
 
 from chambers.models.backbones.vision_transformer import ViTB16, ViTB32, ViTL32, ViTL16, DeiTB16, ViTS16, DeiTS16
 from chambers import augmentations
-from chambers.utils.generic import url_to_img
-from vit_keras import utils
+from chambers.data.io import url_to_img
+# from vit_keras import utils
 
 
 def pth_to_npz(pth_path):
@@ -162,7 +165,7 @@ def load_numpy_weights(model, weights_path):
     wdict = dict(wdict)
     set_numpy_weights(model, wdict)
 
-
+#%%
 include_top = True
 # include_top = False
 
@@ -242,6 +245,9 @@ dim = nh * hdim
 batch_size = 2
 some_seq_len = 128
 
+pm.training = False
+
+
 # %%
 def check_layers(l, l_idx):
     pl = pm.blocks[l_idx]
@@ -255,19 +261,19 @@ def check_layers(l, l_idx):
 
     pz = pl.norm2(xp).detach().numpy()
     tz = l.norm2(x).numpy()
-    assert np.allclose(pz, tz, atol=1.0e-5), "norm2"
+    assert np.allclose(pz, tz, atol=1.0e-4), "norm2"
 
     pz = pl.attn(xp).detach().numpy()
     tz = l.multi_head_attention([x, x, x]).numpy()
-    assert np.allclose(pz, tz, atol=1.0e-4), "mha"
+    assert np.allclose(pz, tz, atol=1.0e-5), "mha"
 
     pz = pl.mlp(xp).detach().numpy()
     tz = l.dense2(l.dense1(x)).numpy()
-    assert np.allclose(pz, tz, atol=1.0e-4), "mlp"
+    assert np.allclose(pz, tz, atol=1.0e-5), "mlp"
 
     pz = pl(xp).detach().numpy()
     tz = l(x).numpy()
-    assert np.allclose(pz, tz, atol=1.0e-3), "layer"
+    assert np.allclose(pz, tz, atol=1.0e-4), "layer"
 
 for idx, l in enumerate(tm.get_layer("encoder").layers):
     check_layers(l, idx)
@@ -279,7 +285,7 @@ cx = x.transpose([0, 3, 1, 2])
 pz = pm.patch_embed(torch.tensor(cx)).detach().numpy()
 pt = tm.get_layer("patch_embeddings")(x).numpy()
 
-assert np.allclose(pz, pt, atol=1.0e-4)
+assert np.allclose(pz, pt, atol=1.0e-5)
 
 # %%
 if feature_dim is not None:
@@ -334,9 +340,9 @@ if include_top:
     py = py.detach().numpy()
     assert np.allclose(py, ty, atol=1.0e-3)
 
-    classes = utils.get_imagenet_classes()
-    print(classes[py[0].argmax()])  # Granny smith
-    print(classes[ty[0].argmax()])  # Granny smith
+    # classes = utils.get_imagenet_classes()
+    # print(classes[py[0].argmax()])  # Granny smith
+    # print(classes[ty[0].argmax()])  # Granny smith
 
     # import matplotlib.pyplot as plt
     #
@@ -346,15 +352,15 @@ if include_top:
     # plt.show()
 
 #%%
-import os
-
-save_dir = "keras_weights"
-
-top = "_no_top" if not include_top else ""
-deit_prefix = "_deit" if deit else ""
-in21k_prefix = "_21k" if in21k else ""
-n_classes = "_1000" if not in21k else ""
-save_name = "{}_imagenet{}{}_{}{}{}.h5".format(tm.name, in21k_prefix, n_classes, img_size, deit_prefix, top)
-
-os.makedirs(save_dir, exist_ok=True)
-tm.save_weights(os.path.join(save_dir, save_name))
+# import os
+#
+# save_dir = "keras_weights"
+#
+# top = "_no_top" if not include_top else ""
+# deit_prefix = "_deit" if deit else ""
+# in21k_prefix = "_21k" if in21k else ""
+# n_classes = "_1000" if not in21k else ""
+# save_name = "{}_imagenet{}{}_{}{}{}.h5".format(tm.name, in21k_prefix, n_classes, img_size, deit_prefix, top)
+#
+# os.makedirs(save_dir, exist_ok=True)
+# tm.save_weights(os.path.join(save_dir, save_name))

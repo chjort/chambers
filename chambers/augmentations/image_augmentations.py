@@ -3,8 +3,7 @@ from typing import List
 
 import tensorflow as tf
 import tensorflow_addons as tfa
-from tensorflow.keras.layers import InputSpec
-from tensorflow.keras.layers.experimental import preprocessing
+from tensorflow.keras.layers import InputSpec, Layer, Resizing
 
 
 def blend(image1, image2, factor):
@@ -57,14 +56,8 @@ def _randomly_negate_value(value):
 
 
 @tf.keras.utils.register_keras_serializable(package="Chambers")
-class RandomChance(preprocessing.PreprocessingLayer):
-    def __init__(
-        self,
-        transform: preprocessing.PreprocessingLayer,
-        probability,
-        name=None,
-        **kwargs
-    ):
+class RandomChance(Layer):
+    def __init__(self, transform: Layer, probability, name=None, **kwargs):
         if name is None and transform.name is not None:
             name = "random_chance_" + transform.name
         super(RandomChance, self).__init__(name=name, **kwargs)
@@ -98,10 +91,10 @@ class RandomChance(preprocessing.PreprocessingLayer):
 
 
 @tf.keras.utils.register_keras_serializable(package="Chambers")
-class RandomChoice(preprocessing.PreprocessingLayer):
+class RandomChoice(Layer):
     def __init__(
         self,
-        transforms: List[preprocessing.PreprocessingLayer],
+        transforms: List[Layer],
         n_transforms,
         elementwise=False,
         name=None,
@@ -167,7 +160,7 @@ class RandomChoice(preprocessing.PreprocessingLayer):
 
 
 @tf.keras.utils.register_keras_serializable(package="Chambers")
-class ImageNetNormalization(preprocessing.PreprocessingLayer):
+class ImageNetNormalization(Layer):
     def __init__(self, mode="caffe", name=None, **kwargs):
         super(ImageNetNormalization, self).__init__(name=name, **kwargs)
         if mode not in {"caffe", "tf", "torch"}:
@@ -232,7 +225,7 @@ class ImageNetNormalization(preprocessing.PreprocessingLayer):
 
 
 @tf.keras.utils.register_keras_serializable(package="Chambers")
-class ResizingMinMax(preprocessing.PreprocessingLayer):
+class ResizingMinMax(Layer):
     """
     Resize an image to have its smallest side equal 'min_side' or its largest side equal 'max_side'.
     If both 'min_side' and 'max_side' is given, image will be resized to the side that scales down the image the most.
@@ -279,7 +272,7 @@ class ResizingMinMax(preprocessing.PreprocessingLayer):
         new_height = tf.cast(height * scale, tf.int32)
         new_width = tf.cast(width * scale, tf.int32)
 
-        resized = preprocessing.Resizing(
+        resized = Resizing(
             height=new_height, width=new_width, interpolation=self.interpolation
         )(inputs)
         return resized
@@ -301,7 +294,7 @@ class ResizingMinMax(preprocessing.PreprocessingLayer):
 
 
 @tf.keras.utils.register_keras_serializable(package="Chambers")
-class AutoContrast(preprocessing.PreprocessingLayer):
+class AutoContrast(Layer):
     def __init__(self, name=None, **kwargs):
         super(AutoContrast, self).__init__(name=name, **kwargs)
         self.input_spec = InputSpec(ndim=4)
@@ -332,7 +325,7 @@ class AutoContrast(preprocessing.PreprocessingLayer):
 
 
 @tf.keras.utils.register_keras_serializable(package="Chambers")
-class Equalize(preprocessing.PreprocessingLayer):
+class Equalize(Layer):
     def __init__(self, name=None, **kwargs):
         super(Equalize, self).__init__(name=name, **kwargs)
         self.input_spec = InputSpec(ndim=4)
@@ -345,7 +338,7 @@ class Equalize(preprocessing.PreprocessingLayer):
 
 
 @tf.keras.utils.register_keras_serializable(package="Chambers")
-class Invert(preprocessing.PreprocessingLayer):
+class Invert(Layer):
     def __init__(self, name=None, **kwargs):
         super(Invert, self).__init__(name=name, **kwargs)
         self.input_spec = InputSpec(ndim=4)
@@ -358,7 +351,7 @@ class Invert(preprocessing.PreprocessingLayer):
 
 
 @tf.keras.utils.register_keras_serializable(package="Chambers")
-class Rotate(preprocessing.PreprocessingLayer):
+class Rotate(Layer):
     def __init__(
         self,
         degrees,
@@ -402,7 +395,7 @@ class Rotate(preprocessing.PreprocessingLayer):
 
 
 @tf.keras.utils.register_keras_serializable(package="Chambers")
-class Posterize(preprocessing.PreprocessingLayer):
+class Posterize(Layer):
     def __init__(self, bits, name=None, **kwargs):
         super(Posterize, self).__init__(name=name, **kwargs)
         self.bits = bits
@@ -424,7 +417,7 @@ class Posterize(preprocessing.PreprocessingLayer):
 
 
 @tf.keras.utils.register_keras_serializable(package="Chambers")
-class Solarize(preprocessing.PreprocessingLayer):
+class Solarize(Layer):
     def __init__(self, threshold=128, name=None, **kwargs):
         super(Solarize, self).__init__(name=name, **kwargs)
         self.threshold = threshold
@@ -443,7 +436,7 @@ class Solarize(preprocessing.PreprocessingLayer):
 
 
 @tf.keras.utils.register_keras_serializable(package="Chambers")
-class SolarizeAdd(preprocessing.PreprocessingLayer):
+class SolarizeAdd(Layer):
     def __init__(self, addition=0, threshold=128, name=None, **kwargs):
         super(SolarizeAdd, self).__init__(name=name, **kwargs)
         self.addition = addition
@@ -465,7 +458,7 @@ class SolarizeAdd(preprocessing.PreprocessingLayer):
 
 
 @tf.keras.utils.register_keras_serializable(package="Chambers")
-class Color(preprocessing.PreprocessingLayer):
+class Color(Layer):
     def __init__(self, factor, name=None, **kwargs):
         super(Color, self).__init__(name=name, **kwargs)
         self.factor = factor
@@ -485,7 +478,7 @@ class Color(preprocessing.PreprocessingLayer):
 
 
 @tf.keras.utils.register_keras_serializable(package="Chambers")
-class Contrast(preprocessing.PreprocessingLayer):
+class Contrast(Layer):
     def __init__(self, factor, name=None, **kwargs):
         super(Contrast, self).__init__(name=name, **kwargs)
         self.factor = factor
@@ -515,7 +508,7 @@ class Contrast(preprocessing.PreprocessingLayer):
 
 
 @tf.keras.utils.register_keras_serializable(package="Chambers")
-class Brightness(preprocessing.PreprocessingLayer):
+class Brightness(Layer):
     def __init__(self, factor, name=None, **kwargs):
         super(Brightness, self).__init__(name=name, **kwargs)
         self.factor = factor
@@ -535,7 +528,7 @@ class Brightness(preprocessing.PreprocessingLayer):
 
 
 @tf.keras.utils.register_keras_serializable(package="Chambers")
-class Sharpness(preprocessing.PreprocessingLayer):
+class Sharpness(Layer):
     def __init__(self, factor, name=None, **kwargs):
         super(Sharpness, self).__init__(name=name, **kwargs)
         self.factor = factor
@@ -554,7 +547,7 @@ class Sharpness(preprocessing.PreprocessingLayer):
 
 
 @tf.keras.utils.register_keras_serializable(package="Chambers")
-class ShearX(preprocessing.PreprocessingLayer):
+class ShearX(Layer):
     def __init__(
         self,
         level,
@@ -597,7 +590,7 @@ class ShearX(preprocessing.PreprocessingLayer):
 
 
 @tf.keras.utils.register_keras_serializable(package="Chambers")
-class ShearY(preprocessing.PreprocessingLayer):
+class ShearY(Layer):
     def __init__(
         self,
         level,
@@ -640,7 +633,7 @@ class ShearY(preprocessing.PreprocessingLayer):
 
 
 @tf.keras.utils.register_keras_serializable(package="Chambers")
-class TranslateX(preprocessing.PreprocessingLayer):
+class TranslateX(Layer):
     def __init__(
         self,
         pixels,
@@ -683,7 +676,7 @@ class TranslateX(preprocessing.PreprocessingLayer):
 
 
 @tf.keras.utils.register_keras_serializable(package="Chambers")
-class TranslateY(preprocessing.PreprocessingLayer):
+class TranslateY(Layer):
     def __init__(
         self,
         pixels,
@@ -726,7 +719,7 @@ class TranslateY(preprocessing.PreprocessingLayer):
 
 
 @tf.keras.utils.register_keras_serializable(package="Chambers")
-class CutOut(preprocessing.PreprocessingLayer):
+class CutOut(Layer):
     def __init__(self, mask_size, constant_values=0, name=None, **kwargs):
         super(CutOut, self).__init__(name=name, **kwargs)
         self.mask_size = mask_size

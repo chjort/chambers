@@ -1,7 +1,6 @@
 import tensorflow as tf
 from keras.utils.control_flow_util import smart_cond
-from tensorflow.keras.layers import InputSpec
-from tensorflow.keras.layers.experimental import preprocessing
+from tensorflow.keras.layers import InputSpec, Layer
 
 from chambers.augmentations import image_augmentations
 
@@ -130,7 +129,7 @@ def _get_transform(transform_name, magnitude):
 
 
 @tf.keras.utils.register_keras_serializable(package="Chambers")
-class AutoAugment(preprocessing.PreprocessingLayer):
+class AutoAugment(Layer):
     """ Applies a random augmentation pair to each image """
 
     def __init__(self, elementwise=False, name=None, **kwargs):
@@ -173,7 +172,7 @@ class AutoAugment(preprocessing.PreprocessingLayer):
 
 
 @tf.keras.utils.register_keras_serializable(package="Chambers")
-class RandAugment(preprocessing.PreprocessingLayer):
+class RandAugment(Layer):
     def __init__(self, n_transforms, magnitude, elementwise=False, name=None, **kwargs):
         super(RandAugment, self).__init__(name=name, **kwargs)
         self.n_transforms = n_transforms

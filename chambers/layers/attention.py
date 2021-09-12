@@ -1,6 +1,7 @@
 import math
 
 import tensorflow as tf
+from keras.layers import EinsumDense
 
 
 @tf.keras.utils.register_keras_serializable(package="Chambers")
@@ -49,54 +50,6 @@ class MultiHeadAttention(tf.keras.layers.Layer):
         self.permute_mask = tf.keras.layers.Permute((2, 1))
 
     def build(self, input_shape):
-        d = input_shape[0][-1]
-
-        self.w_query = self.add_weight(
-            name="w_query",
-            shape=(d, self.num_heads, self.head_dim),
-            initializer=self.dense_kernel_initializer,
-        )
-        self.b_query = self.add_weight(
-            name="b_query",
-            shape=(self.num_heads, 1, self.head_dim),
-            initializer="zeros",
-        )
-
-        self.w_value = self.add_weight(
-            name="w_value",
-            shape=(d, self.num_heads, self.head_dim),
-            initializer=self.dense_kernel_initializer,
-        )
-        self.b_value = self.add_weight(
-            name="b_value",
-            shape=(self.num_heads, 1, self.head_dim),
-            initializer="zeros",
-        )
-
-        self.w_key = self.add_weight(
-            name="w_key",
-            shape=(d, self.num_heads, self.head_dim),
-            initializer=self.dense_kernel_initializer,
-        )
-        self.b_key = self.add_weight(
-            name="b_key",
-            shape=(self.num_heads, 1, self.head_dim),
-            initializer="zeros",
-        )
-
-        self.w_projection = self.add_weight(
-            name="w_projection",
-            shape=(self.num_heads, d, self.head_dim),
-            initializer=self.dense_kernel_initializer,
-        )
-        self.b_projection = self.add_weight(
-            name="b_projection",
-            shape=(1, d),
-            initializer="zeros",
-        )
-        super(MultiHeadAttention, self).build(input_shape)
-
-    def call(self, inputs, mask=None, training=None):
         """
         Einsum notation:
         b = batch_size
@@ -105,14 +58,44 @@ class MultiHeadAttention(tf.keras.layers.Layer):
         n = num heads
         h = head dimension
         """
+
+        d = input_shape[0][-1]
+        t = input_shape[0][1]
+
+        qkv_einsum_equation = "btd,dnh->bnth"
+        qkv_bias_axes = "nh"
+        qkv_output_shape = [self.num_heads, t, self.head_dim]  # excluding batch dimension
+        self.q_dense = EinsumDense(
+            qkv_einsum_equation,
+            output_shape=qkv_output_shape,
+            bias_axes=qkv_bias_axes,
+        )
+        self.v_dense = EinsumDense(
+            qkv_einsum_equation,
+            output_shape=qkv_output_shape,
+            bias_axes=qkv_bias_axes,
+        )
+        self.k_dense = EinsumDense(
+            qkv_einsum_equation,
+            output_shape=qkv_output_shape,
+            bias_axes=qkv_bias_axes,
+        )
+
+        self.proj_dense = EinsumDense(
+            "bnth,ndh->btd", output_shape=[t, d], bias_axes="d"
+        )
+
+        super(MultiHeadAttention, self).build(input_shape)
+
+    def call(self, inputs, mask=None, training=None):
         q = inputs[0]  # [batch_size, tq, dim]
         v = inputs[1]  # [batch_size, tv, dim]
         k = inputs[2] if len(inputs) > 2 else v  # [batch_size, tv, dim]
 
         # linear projections + head split
-        query = tf.einsum("btd,dnh->bnth", q, self.w_query) + self.b_query
-        value = tf.einsum("btd,dnh->bnth", v, self.w_value) + self.b_value
-        key = tf.einsum("btd,dnh->bnth", k, self.w_key) + self.b_key
+        query = self.q_dense(q)
+        value = self.v_dense(v)
+        key = self.k_dense(k)
 
         if mask is not None:
             mask = self.separate_heads_mask(mask)
@@ -122,7 +105,7 @@ class MultiHeadAttention(tf.keras.layers.Layer):
         )  # [batch_size, num_heads, tq, head_dim]
 
         # linear projection + head merge
-        x = tf.einsum("bnth,ndh->btd", attention, self.w_projection) + self.b_projection
+        x = self.proj_dense(attention)
 
         return x
 

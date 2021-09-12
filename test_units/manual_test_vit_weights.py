@@ -43,7 +43,8 @@ def map_encoder_layer(l, idx, wdict):
         .reshape([dim, nh, hdim])
         .transpose([1, 0, 2])
     )
-    bp = np.expand_dims(wdict[block_name + ".attn.proj.bias"], 0)
+
+    bp = wdict[block_name + ".attn.proj.bias"]
 
     wmap_l = {
         l.multi_head_attention: [
@@ -165,7 +166,7 @@ def load_numpy_weights(model, weights_path):
     wdict = dict(wdict)
     set_numpy_weights(model, wdict)
 
-#%%
+
 include_top = True
 # include_top = False
 

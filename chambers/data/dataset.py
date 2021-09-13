@@ -87,28 +87,35 @@ def _random_upsample(x, n, seed=None):
 
 
 def _block_iter(
-    block, label, block_length, block_bound=True, sample_block_random=False, seed=None
+    block_tensor,
+    label,
+    block_length,
+    block_bound=True,
+    sample_block_random=False,
+    seed=None,
 ):
-    n_files = tf.shape(block)[0]
+    # TODO: bool `block_bound` to int `max_blocks`.
+    n_files = tf.shape(block_tensor)[0]
 
     block_length = tf.cast(block_length, n_files.dtype)
     if n_files < block_length:
-        block = _random_upsample(block, block_length)
+        block_tensor = _random_upsample(block_tensor, block_length)
+        n_files = tf.shape(block_tensor)[0]
 
-    if sample_block_random:
-        block = tf.random.shuffle(block, seed=seed)
-
-    n_files = tf.shape(block)[0]
     labels = tf.tile([label], [n_files])
     labels = tf.cast(labels, tf.int64)
 
-    block = tf.data.Dataset.from_tensor_slices((block, labels))
+    block_iter = tf.data.Dataset.from_tensor_slices((block_tensor, labels))
+
+    if sample_block_random:
+        n_files = tf.cast(n_files, tf.int64)
+        block_iter = block_iter.shuffle(n_files, seed=seed)
 
     if block_bound:
         block_length = tf.cast(block_length, tf.int64)
-        block = block.take(block_length)
+        block_iter = block_iter.take(block_length)  # TODO: Multiply with `max_blocks`
 
-    return block.repeat(1)
+    return block_iter
 
 
 def _block_iter_triplet(
@@ -143,7 +150,7 @@ def _block_iter_triplet(
     )
 
     block_iter = block_iter_pos.concatenate(block_iter_neg)
-    return block_iter.repeat(1)
+    return block_iter
 
 
 def _interleave_fn_image_files(
@@ -209,6 +216,8 @@ def _interleave_fn_image_triplet_files(
             sample_block_random=sample_block_random,
             seed=seed,
         )
+        # call .repeat(1) to make it a RepeatDataset, so both if/else branches are same dataset type.
+        block_iter = block_iter.repeat(1)
     else:
         block_iter = _block_iter(
             img_files,
@@ -218,6 +227,8 @@ def _interleave_fn_image_triplet_files(
             sample_block_random=sample_block_random,
             seed=seed,
         )
+        # call .repeat(1) to make it a RepeatDataset, so both if/else branches are same dataset type.
+        block_iter = block_iter.repeat(1)
 
     return block_iter
 
@@ -268,6 +279,9 @@ def InterleaveImageClassDataset(
     Constructs a tensorflow.data.Dataset which loads images by interleaving through class folders.
     """
 
+    if images_per_block is None or images_per_block == -1:
+        images_per_block = 1
+
     interleave_fn = partial(
         _interleave_fn_image_files,
         block_length=images_per_block,
@@ -311,6 +325,9 @@ def InterleaveImageTripletDataset(
     Constructs a tensorflow.data.Dataset which loads images by interleaving through triplet folders.
     """
 
+    if images_per_block is None or images_per_block == -1:
+        images_per_block = 1
+
     interleave_fn = partial(
         _interleave_fn_triplet_files,
         block_length=images_per_block,
@@ -353,6 +370,9 @@ def InterleaveImageClassTripletDataset(
     """
     Constructs a tensorflow.data.Dataset which loads images by interleaving through class folders and triplet folders.
     """
+
+    if images_per_block is None or images_per_block == -1:
+        images_per_block = 1
 
     interleave_fn = partial(
         _interleave_fn_image_triplet_files,

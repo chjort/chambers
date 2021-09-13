@@ -349,7 +349,7 @@ class TestBlockIter(tf.test.TestCase):
         files = match_img_files(self.class_dir)
 
         block_iter = _block_iter(
-            block=files,
+            block_tensor=files,
             label=self.label,
             block_length=2,
             block_bound=False,
@@ -363,12 +363,13 @@ class TestBlockIter(tf.test.TestCase):
         self.assertEqual(block_list, files_list)
 
     def test_block_iter1(self):
+        """ test block bound"""
         files = match_img_files(self.class_dir)
 
         block_len = 2
 
         block_iter = _block_iter(
-            block=files,
+            block_tensor=files,
             label=self.label,
             block_length=block_len,
             block_bound=True,
@@ -382,10 +383,11 @@ class TestBlockIter(tf.test.TestCase):
         self.assertEqual(block_list, files_list)
 
     def test_block_iter2(self):
+        """ test sample block randomly """
         files = match_img_files(self.class_dir)
 
         block_iter = _block_iter(
-            block=files,
+            block_tensor=files,
             label=self.label,
             block_length=2,
             block_bound=False,
@@ -404,7 +406,7 @@ class TestBlockIter(tf.test.TestCase):
         block_len = 2
 
         block_iter = _block_iter(
-            block=files,
+            block_tensor=files,
             label=self.label,
             block_length=block_len,
             block_bound=True,

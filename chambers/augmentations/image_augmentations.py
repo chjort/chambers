@@ -56,244 +56,6 @@ def _randomly_negate_value(value):
     return value
 
 
-@tf.keras.utils.register_keras_serializable(package="Chambers")
-class RandomChance(Layer):
-    def __init__(self, transform: Layer, probability, name=None, **kwargs):
-        if name is None and transform.name is not None:
-            name = "random_chance_" + transform.name
-        super(RandomChance, self).__init__(name=name, **kwargs)
-        self.transform = transform
-        self.probability = probability
-
-    def call(self, inputs, **kwargs):
-        do_transform = tf.random.uniform([]) < self.probability
-        x = tf.cond(
-            pred=do_transform,
-            true_fn=lambda: self.transform(inputs),
-            false_fn=lambda: inputs,
-        )
-        return x
-
-    def compute_output_shape(self, input_shape):
-        return self.transform.compute_output_shape(input_shape)
-
-    def get_config(self):
-        config = {
-            "transform": tf.keras.layers.serialize(self.transform),
-            "probability": self.probability,
-        }
-        base_config = super(RandomChance, self).get_config()
-        return dict(list(base_config.items()) + list(config.items()))
-
-    @classmethod
-    def from_config(cls, config):
-        config["transform"] = tf.keras.layers.deserialize(config["transform"])
-        return cls(**config)
-
-
-@tf.keras.utils.register_keras_serializable(package="Chambers")
-class RandomChoice(Layer):
-    def __init__(
-        self,
-        transforms: List[Layer],
-        n_transforms,
-        elementwise=False,
-        name=None,
-        **kwargs
-    ):
-        super(RandomChoice, self).__init__(name=name, **kwargs)
-        self.transforms = transforms
-        self.n_transforms = n_transforms
-        self.elementwise = elementwise
-
-    def call(self, inputs, **kwargs):
-        if self.elementwise:
-            x = tf.expand_dims(inputs, 1)
-            x = tf.map_fn(self._random_transforms, x)
-            x = x[:, 0, :, :, :]
-        else:
-            x = self._random_transforms(inputs)
-        return x
-
-    def compute_output_shape(self, input_shape):
-        # output shapes of all transforms
-        shapes = [t.compute_output_shape(input_shape) for t in self.transforms]
-        shapes = np.array(shapes, dtype=np.float)
-
-        # find dimensions that are identical for all shapes.
-        shape0 = shapes[0]
-        identical_mask = np.all(shapes == shape0, axis=0).astype(int)
-        output_shape = shape0 * identical_mask
-
-        # set varying dimensions to None
-        output_shape = output_shape.astype(int).tolist()
-        output_shape = [None if dim == 0 else dim for dim in output_shape]
-
-        return output_shape
-
-    def get_config(self):
-        config = {
-            "transforms": [
-                tf.keras.layers.serialize(transform) for transform in self.transforms
-            ],
-            "n_transforms": self.n_transforms,
-            "elementwise": self.elementwise,
-        }
-        base_config = super(RandomChoice, self).get_config()
-        return dict(list(base_config.items()) + list(config.items()))
-
-    @classmethod
-    def from_config(cls, config):
-        config["transforms"] = [
-            tf.keras.layers.deserialize(transform) for transform in config["transforms"]
-        ]
-        return cls(**config)
-
-    def _random_transforms(self, inputs):
-        for i in range(self.n_transforms):
-            transform_idx = tf.random.uniform(
-                [], maxval=len(self.transforms), dtype=tf.int32
-            )
-            for j, transform in enumerate(self.transforms):
-                inputs = tf.cond(
-                    pred=tf.equal(j, transform_idx),
-                    true_fn=lambda: transform(inputs),
-                    false_fn=lambda: inputs,
-                )
-        return inputs
-
-
-@tf.keras.utils.register_keras_serializable(package="Chambers")
-class ImageNetNormalization(Layer):
-    def __init__(self, mode="caffe", name=None, **kwargs):
-        super(ImageNetNormalization, self).__init__(name=name, **kwargs)
-        if mode not in {"caffe", "tf", "torch"}:
-            raise ValueError("Unknown mode " + str(mode))
-        self.mode = mode
-        self.input_spec = InputSpec(ndim=4)
-
-    def call(self, inputs, **kwargs):
-        if self.mode == "tf":
-            return self._tf_normalize(inputs)
-        elif self.mode == "torch":
-            return self._torch_normalize(inputs)
-        else:
-            return self._caffe_normalize(inputs)
-
-    def compute_output_shape(self, input_shape):
-        return input_shape
-
-    def get_config(self):
-        config = {
-            "mode": self.mode,
-        }
-        base_config = super(ImageNetNormalization, self).get_config()
-        return dict(list(base_config.items()) + list(config.items()))
-
-    def _caffe_normalize(self, x):
-        x = x[..., ::-1]  # RGB -> BGR
-        x = self._normalize(x, mean=[103.939, 116.779, 123.68])
-        return x
-
-    def _torch_normalize(self, x):
-        x = tf.cast(x, tf.float32)
-
-        x = x / 255.0
-        x = self._normalize(x, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-        return x
-
-    @staticmethod
-    def _tf_normalize(x):
-        x = tf.cast(x, tf.float32)
-
-        x = x / 127.5
-        x = x - 1.0
-        return x
-
-    @staticmethod
-    def _normalize(x, mean, std=None):
-        """ Normalizes an image with mean and standard deviation """
-        x = tf.cast(x, tf.float32)
-
-        mean = tf.constant(mean, dtype=tf.float32)
-
-        # subtract mean
-        x_normed = x - mean
-
-        if std is not None:
-            # divide by standard deviation
-            std = tf.constant(std, dtype=tf.float32)
-            x_normed = x_normed / std
-
-        return x_normed
-
-
-@tf.keras.utils.register_keras_serializable(package="Chambers")
-class ResizingMinMax(Layer):
-    """
-    Resize an image to have its smallest side equal 'min_side' or its largest side equal 'max_side'.
-    If both 'min_side' and 'max_side' is given, image will be resized to the side that scales down the image the most.
-    Keeps aspect ratio of the image.
-    """
-
-    def __init__(
-        self,
-        min_side=None,
-        max_side=None,
-        interpolation="bilinear",
-        name=None,
-        **kwargs
-    ):
-        super(ResizingMinMax, self).__init__(name=name, **kwargs)
-
-        if min_side is None and max_side is None:
-            raise ValueError("Must specify either 'min_side' or 'max_side'.")
-
-        self.min_side = min_side
-        self.max_side = max_side
-        self.interpolation = interpolation
-        self.input_spec = InputSpec(ndim=4)
-
-    def call(self, inputs, **kwargs):
-        height = tf.cast(tf.shape(inputs)[1], tf.float32)
-        width = tf.cast(tf.shape(inputs)[2], tf.float32)
-
-        if self.min_side is not None and self.max_side is not None:
-            cur_min_side = tf.minimum(width, height)
-            min_side = tf.cast(self.min_side, tf.float32)
-            cur_max_side = tf.maximum(width, height)
-            max_side = tf.cast(self.max_side, tf.float32)
-            scale = tf.minimum(max_side / cur_max_side, min_side / cur_min_side)
-        elif self.min_side is not None:
-            cur_min_side = tf.minimum(width, height)
-            min_side = tf.cast(self.min_side, tf.float32)
-            scale = min_side / cur_min_side
-        else:
-            cur_max_side = tf.maximum(width, height)
-            max_side = tf.cast(self.max_side, tf.float32)
-            scale = max_side / cur_max_side
-
-        new_height = tf.cast(height * scale, tf.int32)
-        new_width = tf.cast(width * scale, tf.int32)
-
-        resized = Resizing(
-            height=new_height, width=new_width, interpolation=self.interpolation
-        )(inputs)
-        return resized
-
-    def compute_output_shape(self, input_shape):
-        return [input_shape[0], self.min_side, self.max_side, input_shape[3]]
-
-    def get_config(self):
-        config = {
-            "min_side": self.min_side,
-            "max_side": self.max_side,
-            "interpolation": self.interpolation,
-        }
-        base_config = super(ResizingMinMax, self).get_config()
-        return dict(list(base_config.items()) + list(config.items()))
-
-
 ####### Augmentations used by AutoAugment and RandAugment #######
 
 
@@ -742,4 +504,245 @@ class CutOut(Layer):
     def get_config(self):
         config = {"mask_size": self.mask_size, "constant_values": self.constant_values}
         base_config = super(CutOut, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
+
+
+####### Other #######
+
+
+@tf.keras.utils.register_keras_serializable(package="Chambers")
+class RandomChance(Layer):
+    def __init__(self, transform: Layer, probability, name=None, **kwargs):
+        if name is None and transform.name is not None:
+            name = "random_chance_" + transform.name
+        super(RandomChance, self).__init__(name=name, **kwargs)
+        self.transform = transform
+        self.probability = probability
+
+    def call(self, inputs, **kwargs):
+        do_transform = tf.random.uniform([]) < self.probability
+        x = tf.cond(
+            pred=do_transform,
+            true_fn=lambda: self.transform(inputs),
+            false_fn=lambda: inputs,
+        )
+        return x
+
+    def compute_output_shape(self, input_shape):
+        return self.transform.compute_output_shape(input_shape)
+
+    def get_config(self):
+        config = {
+            "transform": tf.keras.layers.serialize(self.transform),
+            "probability": self.probability,
+        }
+        base_config = super(RandomChance, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
+
+    @classmethod
+    def from_config(cls, config):
+        config["transform"] = tf.keras.layers.deserialize(config["transform"])
+        return cls(**config)
+
+
+@tf.keras.utils.register_keras_serializable(package="Chambers")
+class RandomChoice(Layer):
+    def __init__(
+            self,
+            transforms: List[Layer],
+            n_transforms,
+            elementwise=False,
+            name=None,
+            **kwargs
+    ):
+        super(RandomChoice, self).__init__(name=name, **kwargs)
+        self.transforms = transforms
+        self.n_transforms = n_transforms
+        self.elementwise = elementwise
+
+    def call(self, inputs, **kwargs):
+        if self.elementwise:
+            x = tf.expand_dims(inputs, 1)
+            x = tf.map_fn(self._random_transforms, x)
+            x = x[:, 0, :, :, :]
+        else:
+            x = self._random_transforms(inputs)
+        return x
+
+    def compute_output_shape(self, input_shape):
+        # output shapes of all transforms
+        shapes = [t.compute_output_shape(input_shape) for t in self.transforms]
+        shapes = np.array(shapes, dtype=np.float)
+
+        # find dimensions that are identical for all shapes.
+        shape0 = shapes[0]
+        identical_mask = np.all(shapes == shape0, axis=0).astype(int)
+        output_shape = shape0 * identical_mask
+
+        # set varying dimensions to None
+        output_shape = output_shape.astype(int).tolist()
+        output_shape = [None if dim == 0 else dim for dim in output_shape]
+
+        return output_shape
+
+    def get_config(self):
+        config = {
+            "transforms": [
+                tf.keras.layers.serialize(transform) for transform in self.transforms
+            ],
+            "n_transforms": self.n_transforms,
+            "elementwise": self.elementwise,
+        }
+        base_config = super(RandomChoice, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
+
+    @classmethod
+    def from_config(cls, config):
+        config["transforms"] = [
+            tf.keras.layers.deserialize(transform) for transform in config["transforms"]
+        ]
+        return cls(**config)
+
+    def _random_transforms(self, inputs):
+        for i in range(self.n_transforms):
+            transform_idx = tf.random.uniform(
+                [], maxval=len(self.transforms), dtype=tf.int32
+            )
+            for j, transform in enumerate(self.transforms):
+                inputs = tf.cond(
+                    pred=tf.equal(j, transform_idx),
+                    true_fn=lambda: transform(inputs),
+                    false_fn=lambda: inputs,
+                )
+        return inputs
+
+
+@tf.keras.utils.register_keras_serializable(package="Chambers")
+class ImageNetNormalization(Layer):
+    def __init__(self, mode="caffe", name=None, **kwargs):
+        super(ImageNetNormalization, self).__init__(name=name, **kwargs)
+        if mode not in {"caffe", "tf", "torch"}:
+            raise ValueError("Unknown mode " + str(mode))
+        self.mode = mode
+        self.input_spec = InputSpec(ndim=4)
+
+    def call(self, inputs, **kwargs):
+        if self.mode == "tf":
+            return self._tf_normalize(inputs)
+        elif self.mode == "torch":
+            return self._torch_normalize(inputs)
+        else:
+            return self._caffe_normalize(inputs)
+
+    def compute_output_shape(self, input_shape):
+        return input_shape
+
+    def get_config(self):
+        config = {
+            "mode": self.mode,
+        }
+        base_config = super(ImageNetNormalization, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
+
+    def _caffe_normalize(self, x):
+        x = x[..., ::-1]  # RGB -> BGR
+        x = self._normalize(x, mean=[103.939, 116.779, 123.68])
+        return x
+
+    def _torch_normalize(self, x):
+        x = tf.cast(x, tf.float32)
+
+        x = x / 255.0
+        x = self._normalize(x, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        return x
+
+    @staticmethod
+    def _tf_normalize(x):
+        x = tf.cast(x, tf.float32)
+
+        x = x / 127.5
+        x = x - 1.0
+        return x
+
+    @staticmethod
+    def _normalize(x, mean, std=None):
+        """ Normalizes an image with mean and standard deviation """
+        x = tf.cast(x, tf.float32)
+
+        mean = tf.constant(mean, dtype=tf.float32)
+
+        # subtract mean
+        x_normed = x - mean
+
+        if std is not None:
+            # divide by standard deviation
+            std = tf.constant(std, dtype=tf.float32)
+            x_normed = x_normed / std
+
+        return x_normed
+
+
+@tf.keras.utils.register_keras_serializable(package="Chambers")
+class ResizingMinMax(Layer):
+    """
+    Resize an image to have its smallest side equal 'min_side' or its largest side equal 'max_side'.
+    If both 'min_side' and 'max_side' is given, image will be resized to the side that scales down the image the most.
+    Keeps aspect ratio of the image.
+    """
+
+    def __init__(
+            self,
+            min_side=None,
+            max_side=None,
+            interpolation="bilinear",
+            name=None,
+            **kwargs
+    ):
+        super(ResizingMinMax, self).__init__(name=name, **kwargs)
+
+        if min_side is None and max_side is None:
+            raise ValueError("Must specify either 'min_side' or 'max_side'.")
+
+        self.min_side = min_side
+        self.max_side = max_side
+        self.interpolation = interpolation
+        self.input_spec = InputSpec(ndim=4)
+
+    def call(self, inputs, **kwargs):
+        height = tf.cast(tf.shape(inputs)[1], tf.float32)
+        width = tf.cast(tf.shape(inputs)[2], tf.float32)
+
+        if self.min_side is not None and self.max_side is not None:
+            cur_min_side = tf.minimum(width, height)
+            min_side = tf.cast(self.min_side, tf.float32)
+            cur_max_side = tf.maximum(width, height)
+            max_side = tf.cast(self.max_side, tf.float32)
+            scale = tf.minimum(max_side / cur_max_side, min_side / cur_min_side)
+        elif self.min_side is not None:
+            cur_min_side = tf.minimum(width, height)
+            min_side = tf.cast(self.min_side, tf.float32)
+            scale = min_side / cur_min_side
+        else:
+            cur_max_side = tf.maximum(width, height)
+            max_side = tf.cast(self.max_side, tf.float32)
+            scale = max_side / cur_max_side
+
+        new_height = tf.cast(height * scale, tf.int32)
+        new_width = tf.cast(width * scale, tf.int32)
+
+        resized = Resizing(
+            height=new_height, width=new_width, interpolation=self.interpolation
+        )(inputs)
+        return resized
+
+    def compute_output_shape(self, input_shape):
+        return [input_shape[0], self.min_side, self.max_side, input_shape[3]]
+
+    def get_config(self):
+        config = {
+            "min_side": self.min_side,
+            "max_side": self.max_side,
+            "interpolation": self.interpolation,
+        }
+        base_config = super(ResizingMinMax, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))

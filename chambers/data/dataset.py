@@ -268,10 +268,11 @@ def InterleaveImageClassDataset(
     images_per_block: int,
     image_channels=3,
     block_bound=True,
-    sample_block_random=False,
-    shuffle=False,
+    sample_block_random=False,  # TODO: Rename to "shuffle_block"
+    shuffle=False,  # TODO: Rename to "shuffle_cycle"
     reshuffle_iteration=True,
-    buffer_size=None,
+    buffer_size=None,  # TODO: Rename to "cycle_shuffle_block"
+    # TODO: Add "block_buffer_size"
     seed=None,
     repeats=None,
 ) -> tf.data.Dataset:

@@ -161,7 +161,7 @@ class AutoAugment(Layer):
         return x
 
     def compute_output_shape(self, input_shape):
-        return input_shape
+        return self._transform.compute_output_shape(input_shape)
 
     def get_config(self):
         config = {
@@ -213,7 +213,7 @@ class RandAugment(Layer):
         return x
 
     def compute_output_shape(self, input_shape):
-        return input_shape
+        return self._transform.compute_output_shape(input_shape)
 
     def get_config(self):
         config = {

@@ -1,6 +1,7 @@
 import math
 from typing import List
 
+import numpy as np
 import tensorflow as tf
 import tensorflow_addons as tfa
 from tensorflow.keras.layers import InputSpec, Layer, Resizing
@@ -115,17 +116,20 @@ class RandomChoice(Layer):
         return x
 
     def compute_output_shape(self, input_shape):
-        # check if all transforms has the same output shape
-        output_shape0 = list(self.transforms[0].compute_output_shape(input_shape))
-        is_equal = [
-            list(transform.compute_output_shape(input_shape)) == output_shape0
-            for transform in self.transforms
-        ]
-        if all(is_equal):
-            return output_shape0
-        else:
-            # otherwise the output shape is unknown
-            return [input_shape[0], None, None, None]
+        # output shapes of all transforms
+        shapes = [t.compute_output_shape(input_shape) for t in self.transforms]
+        shapes = np.array(shapes, dtype=np.float)
+
+        # find dimensions that are identical for all shapes.
+        shape0 = shapes[0]
+        identical_mask = np.all(shapes == shape0, axis=0).astype(int)
+        output_shape = shape0 * identical_mask
+
+        # set varying dimensions to None
+        output_shape = output_shape.astype(int).tolist()
+        output_shape = [None if dim == 0 else dim for dim in output_shape]
+
+        return output_shape
 
     def get_config(self):
         config = {
